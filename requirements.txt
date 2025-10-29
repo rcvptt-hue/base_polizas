@@ -1,0 +1,5 @@
+bash
+streamlit
+pandas
+gspread
+google-auth
