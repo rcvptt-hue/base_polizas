@@ -386,6 +386,16 @@ if menu == "📝 Data Entry - Nueva Póliza":
 elif menu == "🔍 Consultar Pólizas por Cliente":
     st.header("🔍 Consultar Pólizas por Cliente")
     
+    # Inicializar estados de sesión
+    if 'cliente_buscado' not in st.session_state:
+        st.session_state.cliente_buscado = None
+    if 'resultados_busqueda' not in st.session_state:
+        st.session_state.resultados_busqueda = []
+    if 'mostrar_duplicacion' not in st.session_state:
+        st.session_state.mostrar_duplicacion = False
+    if 'poliza_a_duplicar' not in st.session_state:
+        st.session_state.poliza_a_duplicar = None
+    
     # Obtener lista de clientes únicos para el dropdown
     with st.spinner("Cargando lista de clientes..."):
         clientes = obtener_clientes_unicos()
@@ -401,39 +411,63 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                 options=clientes,
                 key="select_cliente"
             )
-            buscar_btn = st.button("🔍 Buscar Pólizas", key="buscar_polizas_btn")
+            
+            # Botones en columnas separadas para evitar conflicto
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                buscar_btn = st.button("🔍 Buscar Pólizas", key="buscar_polizas_btn", use_container_width=True)
+            with col_btn2:
+                if st.session_state.cliente_buscado:
+                    limpiar_btn = st.button("🔄 Nueva Búsqueda", key="limpiar_busqueda_btn", use_container_width=True)
+                    if limpiar_btn:
+                        st.session_state.cliente_buscado = None
+                        st.session_state.resultados_busqueda = []
+                        st.session_state.mostrar_duplicacion = False
+                        st.session_state.poliza_a_duplicar = None
+                        st.rerun()
         
+        # Manejar la búsqueda
         if buscar_btn and cliente_seleccionado:
             with st.spinner("Buscando pólizas..."):
                 resultados = buscar_por_nombre_cliente(cliente_seleccionado)
-                
-            if resultados:
-                st.success(f"✅ Se encontraron {len(resultados)} póliza(s) para el cliente {cliente_seleccionado}")
-                
-                # Mostrar resumen
-                df_resultados = pd.DataFrame(resultados)
-                
-                # Columnas importantes para mostrar
-                columnas_importantes = ["No. Cliente", "No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
-                columnas_disponibles = [col for col in columnas_importantes if col in df_resultados.columns]
-                
-                st.dataframe(df_resultados[columnas_disponibles], use_container_width=True)
-                
-                # Opción para ver todos los detalles
-                with st.expander("📋 Ver detalles completos de todas las pólizas"):
-                    st.dataframe(df_resultados, use_container_width=True)
-                
-                # ============================================================
-                # NUEVA FUNCIONALIDAD: DUPLICAR PÓLIZA
-                # ============================================================
-                st.markdown("---")
-                st.subheader("🔄 Duplicar Póliza")
-                
-                # Seleccionar póliza a duplicar
-                polizas_para_duplicar = [f"{p['No. POLIZA']} - {p['PRODUCTO']} (Vence: {p.get('FIN DE VIGENCIA', 'N/A')})" 
-                                       for p in resultados]
-                
-                if polizas_para_duplicar:
+                st.session_state.cliente_buscado = cliente_seleccionado
+                st.session_state.resultados_busqueda = resultados
+                st.session_state.mostrar_duplicacion = False
+                st.session_state.poliza_a_duplicar = None
+        
+        # Mostrar resultados si hay una búsqueda activa
+        if st.session_state.cliente_buscado and st.session_state.resultados_busqueda:
+            resultados = st.session_state.resultados_busqueda
+            cliente_seleccionado = st.session_state.cliente_buscado
+            
+            st.success(f"✅ Se encontraron {len(resultados)} póliza(s) para el cliente {cliente_seleccionado}")
+            
+            # Mostrar resumen
+            df_resultados = pd.DataFrame(resultados)
+            
+            # Columnas importantes para mostrar
+            columnas_importantes = ["No. Cliente", "No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
+            columnas_disponibles = [col for col in columnas_importantes if col in df_resultados.columns]
+            
+            st.dataframe(df_resultados[columnas_disponibles], use_container_width=True)
+            
+            # Opción para ver todos los detalles
+            with st.expander("📋 Ver detalles completos de todas las pólizas"):
+                st.dataframe(df_resultados, use_container_width=True)
+            
+            # ============================================================
+            # NUEVA FUNCIONALIDAD: DUPLICAR PÓLIZA
+            # ============================================================
+            st.markdown("---")
+            st.subheader("🔄 Duplicar Póliza")
+            
+            # Seleccionar póliza a duplicar
+            polizas_para_duplicar = [f"{p['No. POLIZA']} - {p['PRODUCTO']} (Vence: {p.get('FIN DE VIGENCIA', 'N/A')})" 
+                                   for p in resultados]
+            
+            if polizas_para_duplicar:
+                # Usar un contenedor para agrupar la selección de póliza
+                with st.container():
                     poliza_seleccionada_idx = st.selectbox(
                         "Selecciona la póliza a duplicar:",
                         options=range(len(polizas_para_duplicar)),
@@ -441,10 +475,20 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                         key="select_poliza_duplicar_idx"
                     )
                     
-                    if poliza_seleccionada_idx is not None:
-                        # Obtener la póliza original
-                        poliza_original = resultados[poliza_seleccionada_idx]
-                        
+                    seleccionar_btn = st.button("📝 Seleccionar para Duplicar", key="seleccionar_duplicar_btn")
+                    
+                    if seleccionar_btn and poliza_seleccionada_idx is not None:
+                        st.session_state.mostrar_duplicacion = True
+                        st.session_state.poliza_a_duplicar = resultados[poliza_seleccionada_idx]
+                
+                # Mostrar formulario de duplicación si está activo
+                if st.session_state.mostrar_duplicacion and st.session_state.poliza_a_duplicar:
+                    poliza_original = st.session_state.poliza_a_duplicar
+                    
+                    st.info(f"📋 Duplicando póliza: {poliza_original['No. POLIZA']} - {poliza_original['PRODUCTO']}")
+                    
+                    # Crear un formulario separado para la duplicación
+                    with st.form(key="form_duplicar_poliza", clear_on_submit=True):
                         st.write("**Complete los nuevos datos para la póliza duplicada:**")
                         
                         col_dup1, col_dup2 = st.columns(2)
@@ -453,45 +497,47 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                             nuevo_no_poliza = st.text_input(
                                 "Nuevo No. POLIZA *",
                                 value="",
-                                key="nuevo_no_poliza"
+                                key="nuevo_no_poliza_form"
                             )
                             nuevo_inicio_vigencia = st.text_input(
                                 "Nuevo INICIO DE VIGENCIA * (DD/MM/AAAA)",
                                 placeholder="DD/MM/AAAA",
-                                key="nuevo_inicio_vigencia"
+                                key="nuevo_inicio_vigencia_form"
                             )
                             nuevo_fin_vigencia = st.text_input(
                                 "Nuevo FIN DE VIGENCIA * (DD/MM/AAAA)",
                                 placeholder="DD/MM/AAAA",
-                                key="nuevo_fin_vigencia"
+                                key="nuevo_fin_vigencia_form"
                             )
                             nueva_prima_anual = st.number_input(
                                 "Nueva PRIMA ANUAL",
                                 value=float(poliza_original.get('PRIMA ANUAL', 0) or 0),
                                 min_value=0.0,
                                 format="%.2f",
-                                key="nueva_prima_anual"
+                                key="nueva_prima_anual_form"
                             )
                         
                         with col_dup2:
                             nuevo_producto = st.text_input(
                                 "PRODUCTO",
                                 value=poliza_original.get('PRODUCTO', ''),
-                                key="nuevo_producto"
+                                key="nuevo_producto_form"
                             )
                             nueva_aseguradora = st.text_input(
                                 "ASEGURADORA",
                                 value=poliza_original.get('ASEGURADORA', ''),
-                                key="nueva_aseguradora"
+                                key="nueva_aseguradora_form"
                             )
                             nuevas_notas = st.text_area(
                                 "NOTAS",
                                 value=poliza_original.get('NOTAS', ''),
-                                key="nuevas_notas"
+                                key="nuevas_notas_form"
                             )
                         
-                        # Botón para duplicar (sin usar st.form)
-                        duplicar_btn = st.button("✅ Duplicar Póliza", type="primary", key="duplicar_poliza_btn")
+                        # Botón para duplicar dentro del formulario
+                        col_btn_dup1, col_btn_dup2, col_btn_dup3 = st.columns([1, 2, 1])
+                        with col_btn_dup2:
+                            duplicar_btn = st.form_submit_button("✅ Duplicar Póliza", use_container_width=True)
                         
                         if duplicar_btn:
                             # Validar campos obligatorios
@@ -526,13 +572,9 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                                 if agregar_poliza(nueva_poliza):
                                     st.success(f"✅ Póliza duplicada exitosamente! Nueva póliza: {nuevo_no_poliza}")
                                     st.balloons()
-                                    # Limpiar campos de duplicación
-                                    st.session_state.nuevo_no_poliza = ""
-                                    st.session_state.nuevo_inicio_vigencia = ""
-                                    st.session_state.nuevo_fin_vigencia = ""
-                                    st.session_state.nuevo_producto = ""
-                                    st.session_state.nueva_aseguradora = ""
-                                    st.session_state.nuevas_notas = ""
+                                    # Resetear estado de duplicación
+                                    st.session_state.mostrar_duplicacion = False
+                                    st.session_state.poliza_a_duplicar = None
                                     st.rerun()
                                 else:
                                     st.error("❌ Error al guardar la póliza duplicada. Por favor intenta nuevamente.")
@@ -679,23 +721,3 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
-
-# ============================================================
-# JAVASCRIPT PARA DESHABILITAR ENTER EN FORMULARIOS
-# ============================================================
-# Inyectar JavaScript para prevenir el envío del formulario con Enter
-st.markdown("""
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        form.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                return false;
-            }
-        });
-    });
-});
-</script>
-""", unsafe_allow_html=True)
