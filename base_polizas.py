@@ -91,15 +91,6 @@ def ensure_sheet_exists(sheet, title, headers):
         return None
     return worksheet
 
-def agregar_poliza(datos):
-    """Agrega una nueva póliza a la hoja"""
-    try:
-        polizas_ws.append_row(datos)
-        return True
-    except Exception as e:
-        st.error(f"❌ Error al agregar póliza: {str(e)}")
-        return False
-
 def obtener_polizas():
     """Obtiene todas las pólizas como lista de diccionarios"""
     try:
@@ -108,15 +99,67 @@ def obtener_polizas():
         st.error(f"❌ Error al obtener pólizas: {str(e)}")
         return []
 
-def buscar_por_cliente(numero_cliente):
-    """Busca pólizas por número de cliente"""
+def obtener_ultimo_id_cliente():
+    """Obtiene el último ID de cliente utilizado"""
     try:
         polizas = obtener_polizas()
-        resultados = [p for p in polizas if str(p.get("No. Cliente", "")) == str(numero_cliente)]
+        if not polizas:
+            return 0
+        
+        ids_clientes = []
+        for poliza in polizas:
+            id_cliente = poliza.get("No. Cliente", "")
+            if id_cliente and str(id_cliente).isdigit():
+                ids_clientes.append(int(id_cliente))
+        
+        return max(ids_clientes) if ids_clientes else 0
+    except Exception as e:
+        st.error(f"❌ Error al obtener último ID: {str(e)}")
+        return 0
+
+def generar_nuevo_id_cliente():
+    """Genera un nuevo ID de cliente automáticamente"""
+    ultimo_id = obtener_ultimo_id_cliente()
+    return ultimo_id + 1
+
+def obtener_clientes_unicos():
+    """Obtiene lista de clientes únicos para el dropdown"""
+    try:
+        polizas = obtener_polizas()
+        if not polizas:
+            return []
+        
+        clientes = {}
+        for poliza in polizas:
+            contratante = poliza.get("CONTRATANTE", "")
+            id_cliente = poliza.get("No. Cliente", "")
+            if contratante:
+                clientes[contratante] = id_cliente
+        
+        # Ordenar alfabéticamente por nombre
+        return sorted(clientes.keys())
+    except Exception as e:
+        st.error(f"❌ Error al obtener clientes: {str(e)}")
+        return []
+
+def buscar_por_nombre_cliente(nombre_cliente):
+    """Busca pólizas por nombre del cliente"""
+    try:
+        polizas = obtener_polizas()
+        resultados = [p for p in polizas if p.get("CONTRATANTE", "") == nombre_cliente]
         return resultados
     except Exception as e:
         st.error(f"❌ Error al buscar pólizas: {str(e)}")
         return []
+
+def agregar_poliza(datos):
+    """Agrega una nueva póliza a la hoja"""
+    try:
+        polizas_ws.append_row(datos)
+        return True
+    except Exception as e:
+        st.error(f"❌ Error al agregar póliza: {str(e)}")
+        return False
 
 def obtener_polizas_proximas_vencer(dias=30):
     """Obtiene pólizas que vencen en los próximos N días"""
@@ -156,6 +199,58 @@ def obtener_polizas_proximas_vencer(dias=30):
         return []
 
 # ============================================================
+# FUNCIONES PARA MANEJO DE FECHAS
+# ============================================================
+def crear_campo_fecha(label, key, valor_default=None):
+    """Crea un campo de fecha que permite años anteriores a 2015"""
+    st.write(f"**{label}**")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        dia = st.number_input(f"Día {label}", min_value=1, max_value=31, value=1, key=f"dia_{key}")
+    with col2:
+        mes = st.selectbox(f"Mes {label}", 
+                          options=list(range(1, 13)),
+                          format_func=lambda x: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][x-1],
+                          key=f"mes_{key}")
+    with col3:
+        # Permitir años desde 1900 hasta el año actual + 10
+        año_actual = datetime.now().year
+        año = st.number_input(f"Año {label}", min_value=1900, max_value=año_actual + 10, value=1980, key=f"año_{key}")
+    
+    try:
+        fecha = datetime(año, mes, dia).date()
+        return fecha
+    except ValueError:
+        st.error(f"❌ Fecha inválida para {label}")
+        return None
+
+def crear_campo_fecha_simple(label, key, valor_default=None):
+    """Alternativa más simple usando text_input para fecha"""
+    if valor_default is None:
+        valor_default = "01/01/1980"
+    
+    fecha_texto = st.text_input(
+        label, 
+        value=valor_default,
+        placeholder="DD/MM/AAAA",
+        key=key,
+        help="Formato: DD/MM/AAAA (por ejemplo: 15/03/1975)"
+    )
+    
+    # Validar formato de fecha
+    if fecha_texto:
+        try:
+            fecha = datetime.strptime(fecha_texto, "%d/%m/%Y").date()
+            return fecha
+        except ValueError:
+            st.error(f"❌ Formato de fecha incorrecto para {label}. Use DD/MM/AAAA")
+            return None
+    return None
+
+# ============================================================
 # INICIALIZAR HOJA DE PÓLIZAS
 # ============================================================
 polizas_ws = ensure_sheet_exists(sheet, "Polizas", CAMPOS_POLIZA)
@@ -183,23 +278,51 @@ menu = st.sidebar.radio("Navegación", [
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
     
+    # Opción para elegir el tipo de entrada de fecha
+    metodo_fecha = st.radio("Método para ingresar fechas:", 
+                           ["📅 Selectores individuales (Día/Mes/Año)", "⌨️ Texto (DD/MM/AAAA)"],
+                           key="metodo_fecha")
+    
     with st.form("poliza_form", clear_on_submit=True):
         st.subheader("Información Básica")
         col1, col2 = st.columns(2)
         
         with col1:
-            no_cliente = st.text_input("No. Cliente *", help="ID único del cliente")
+            # ID de cliente generado automáticamente
+            nuevo_id = generar_nuevo_id_cliente()
+            st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
+            
             contratante = st.text_input("CONTRATANTE *")
             asegurado = st.text_input("ASEGURADO *")
             beneficiario = st.text_input("BENEFICIARIO")
-            fecha_nac_contratante = st.date_input("FECHA DE NAC CONTRATANTE")
-            fecha_nac_asegurado = st.date_input("FECHA DE NAC ASEGURADO")
+            
+            # Campos de fecha de nacimiento según el método seleccionado
+            if metodo_fecha == "📅 Selectores individuales (Día/Mes/Año)":
+                st.write("FECHA DE NAC CONTRATANTE")
+                fecha_nac_contratante = crear_campo_fecha("Nacimiento Contratante", "nac_cont")
+                
+                st.write("FECHA DE NAC ASEGURADO")
+                fecha_nac_asegurado = crear_campo_fecha("Nacimiento Asegurado", "nac_aseg")
+            else:
+                fecha_nac_contratante = crear_campo_fecha_simple("FECHA DE NAC CONTRATANTE", "nac_cont_text")
+                fecha_nac_asegurado = crear_campo_fecha_simple("FECHA DE NAC ASEGURADO", "nac_aseg_text")
+            
             estado_civil = st.selectbox("ESTADO CIVIL", ["", "Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
         
         with col2:
             no_poliza = st.text_input("No. POLIZA *")
-            inicio_vigencia = st.date_input("INICIO DE VIGENCIA *")
-            fin_vigencia = st.date_input("FIN DE VIGENCIA *")
+            
+            # Fechas de vigencia según el método seleccionado
+            if metodo_fecha == "📅 Selectores individuales (Día/Mes/Año)":
+                st.write("INICIO DE VIGENCIA *")
+                inicio_vigencia = crear_campo_fecha("Inicio Vigencia", "inicio_vig")
+                
+                st.write("FIN DE VIGENCIA *")
+                fin_vigencia = crear_campo_fecha("Fin Vigencia", "fin_vig")
+            else:
+                inicio_vigencia = crear_campo_fecha_simple("INICIO DE VIGENCIA *", "inicio_vig_text", "01/01/2024")
+                fin_vigencia = crear_campo_fecha_simple("FIN DE VIGENCIA *", "fin_vig_text", "31/12/2024")
+            
             forma_pago = st.selectbox("FORMA DE PAGO", ["", "Efectivo", "Tarjeta", "Transferencia", "Débito Automático"])
             frecuencia_pago = st.selectbox("FRECUENCIA DE PAGO", ["", "Anual", "Semestral", "Trimestral", "Mensual"])
             prima_anual = st.number_input("PRIMA ANUAL", min_value=0.0, format="%.2f")
@@ -223,21 +346,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
         
         if submitted:
             # Validar campos obligatorios
-            if not no_cliente or not contratante or not asegurado or not no_poliza:
-                st.error("❌ Por favor completa los campos obligatorios (*)")
+            campos_faltantes = []
+            if not contratante: campos_faltantes.append("CONTRATANTE")
+            if not asegurado: campos_faltantes.append("ASEGURADO")
+            if not no_poliza: campos_faltantes.append("No. POLIZA")
+            if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
+            if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
+            
+            if campos_faltantes:
+                st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
             else:
                 # Preparar datos para guardar
                 datos_poliza = [
-                    no_cliente,
+                    str(nuevo_id),  # ID generado automáticamente
                     contratante,
                     asegurado,
                     beneficiario,
-                    fecha_nac_contratante.strftime("%Y-%m-%d") if fecha_nac_contratante else "",
-                    fecha_nac_asegurado.strftime("%Y-%m-%d") if fecha_nac_asegurado else "",
+                    fecha_nac_contratante.strftime("%d/%m/%Y") if fecha_nac_contratante else "",
+                    fecha_nac_asegurado.strftime("%d/%m/%Y") if fecha_nac_asegurado else "",
                     estado_civil,
                     no_poliza,
-                    inicio_vigencia.strftime("%Y-%m-%d") if inicio_vigencia else "",
-                    fin_vigencia.strftime("%Y-%m-%d") if fin_vigencia else "",
+                    inicio_vigencia.strftime("%d/%m/%Y") if inicio_vigencia else "",
+                    fin_vigencia.strftime("%d/%m/%Y") if fin_vigencia else "",
                     forma_pago,
                     frecuencia_pago,
                     prima_anual,
@@ -252,7 +382,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
                 
                 if agregar_poliza(datos_poliza):
-                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {no_cliente}!")
+                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
                     st.balloons()
 
 # ============================================================
@@ -261,42 +391,53 @@ if menu == "📝 Data Entry - Nueva Póliza":
 elif menu == "🔍 Consultar Pólizas por Cliente":
     st.header("🔍 Consultar Pólizas por Cliente")
     
-    col1, col2 = st.columns([1, 3])
+    # Obtener lista de clientes únicos para el dropdown
+    with st.spinner("Cargando lista de clientes..."):
+        clientes = obtener_clientes_unicos()
     
-    with col1:
-        no_cliente_buscar = st.text_input("Ingresa el No. Cliente")
-        buscar_btn = st.button("🔍 Buscar Pólizas")
-    
-    if buscar_btn and no_cliente_buscar:
-        with st.spinner("Buscando pólizas..."):
-            resultados = buscar_por_cliente(no_cliente_buscar)
-            
-        if resultados:
-            st.success(f"✅ Se encontraron {len(resultados)} póliza(s) para el cliente {no_cliente_buscar}")
-            
-            # Mostrar resumen
-            df_resultados = pd.DataFrame(resultados)
-            
-            # Columnas importantes para mostrar
-            columnas_importantes = ["No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
-            columnas_disponibles = [col for col in columnas_importantes if col in df_resultados.columns]
-            
-            st.dataframe(df_resultados[columnas_disponibles], use_container_width=True)
-            
-            # Opción para ver todos los detalles
-            with st.expander("📋 Ver detalles completos de todas las pólizas"):
-                st.dataframe(df_resultados, use_container_width=True)
-                
-            # Descargar resultados
-            csv = df_resultados.to_csv(index=False, encoding='utf-8')
-            st.download_button(
-                label="📥 Descargar resultados en CSV",
-                data=csv,
-                file_name=f"polizas_cliente_{no_cliente_buscar}.csv",
-                mime="text/csv"
+    if not clientes:
+        st.info("ℹ️ No hay clientes registrados en el sistema")
+    else:
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            cliente_seleccionado = st.selectbox(
+                "Selecciona un cliente:",
+                options=clientes,
+                key="select_cliente"
             )
-        else:
-            st.warning(f"ℹ️ No se encontraron pólizas para el cliente {no_cliente_buscar}")
+            buscar_btn = st.button("🔍 Buscar Pólizas")
+        
+        if buscar_btn and cliente_seleccionado:
+            with st.spinner("Buscando pólizas..."):
+                resultados = buscar_por_nombre_cliente(cliente_seleccionado)
+                
+            if resultados:
+                st.success(f"✅ Se encontraron {len(resultados)} póliza(s) para el cliente {cliente_seleccionado}")
+                
+                # Mostrar resumen
+                df_resultados = pd.DataFrame(resultados)
+                
+                # Columnas importantes para mostrar
+                columnas_importantes = ["No. Cliente", "No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
+                columnas_disponibles = [col for col in columnas_importantes if col in df_resultados.columns]
+                
+                st.dataframe(df_resultados[columnas_disponibles], use_container_width=True)
+                
+                # Opción para ver todos los detalles
+                with st.expander("📋 Ver detalles completos de todas las pólizas"):
+                    st.dataframe(df_resultados, use_container_width=True)
+                    
+                # Descargar resultados
+                csv = df_resultados.to_csv(index=False, encoding='utf-8')
+                st.download_button(
+                    label="📥 Descargar resultados en CSV",
+                    data=csv,
+                    file_name=f"polizas_cliente_{cliente_seleccionado.replace(' ', '_')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.warning(f"ℹ️ No se encontraron pólizas para el cliente {cliente_seleccionado}")
 
 # ============================================================
 # 3. PÓLIZAS PRÓXIMAS A VENCER
@@ -400,8 +541,8 @@ elif menu == "📊 Ver Todas las Pólizas":
 st.sidebar.markdown("---")
 st.sidebar.info("""
 **💡 Instrucciones:**
-- **Data Entry**: Completa todos los campos para nueva póliza
-- **Consultar**: Busca por No. Cliente para ver todas sus pólizas  
+- **Data Entry**: El ID de cliente se genera automáticamente
+- **Consultar**: Busca por nombre del cliente en lista desplegable  
 - **Vencimientos**: Revisa pólizas que vencerán pronto
 - **Ver Todo**: Explora y filtra toda la base de datos
 """)
@@ -419,5 +560,9 @@ try:
         # Pólizas próximas a vencer
         proximas = obtener_polizas_proximas_vencer(30)
         st.sidebar.write(f"**Próximas a vencer (30 días):** {len(proximas)}")
+        
+        # Mostrar último ID utilizado
+        ultimo_id = obtener_ultimo_id_cliente()
+        st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
