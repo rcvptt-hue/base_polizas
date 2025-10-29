@@ -419,8 +419,120 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                 # Opción para ver todos los detalles
                 with st.expander("📋 Ver detalles completos de todas las pólizas"):
                     st.dataframe(df_resultados, use_container_width=True)
+                
+                # ============================================================
+                # NUEVA FUNCIONALIDAD: DUPLICAR PÓLIZA
+                # ============================================================
+                st.markdown("---")
+                st.subheader("🔄 Duplicar Póliza")
+                
+                # Seleccionar póliza a duplicar
+                polizas_para_duplicar = [f"{p['No. POLIZA']} - {p['PRODUCTO']} (Vence: {p.get('FIN DE VIGENCIA', 'N/A')})" 
+                                       for p in resultados]
+                
+                if polizas_para_duplicar:
+                    poliza_seleccionada = st.selectbox(
+                        "Selecciona la póliza a duplicar:",
+                        options=polizas_para_duplicar,
+                        key="select_poliza_duplicar"
+                    )
                     
+                    if poliza_seleccionada:
+                        # Encontrar la póliza original
+                        poliza_original = None
+                        for p in resultados:
+                            if f"{p['No. POLIZA']} - {p['PRODUCTO']} (Vence: {p.get('FIN DE VIGENCIA', 'N/A')})" == poliza_seleccionada:
+                                poliza_original = p
+                                break
+                        
+                        if poliza_original:
+                            # Formulario para duplicar póliza
+                            with st.form("form_duplicar_poliza"):
+                                st.write("**Complete los nuevos datos para la póliza duplicada:**")
+                                
+                                col_dup1, col_dup2 = st.columns(2)
+                                
+                                with col_dup1:
+                                    nuevo_no_poliza = st.text_input(
+                                        "Nuevo No. POLIZA *",
+                                        value="",
+                                        key="nuevo_no_poliza"
+                                    )
+                                    nuevo_inicio_vigencia = st.text_input(
+                                        "Nuevo INICIO DE VIGENCIA * (DD/MM/AAAA)",
+                                        placeholder="DD/MM/AAAA",
+                                        key="nuevo_inicio_vigencia"
+                                    )
+                                    nuevo_fin_vigencia = st.text_input(
+                                        "Nuevo FIN DE VIGENCIA * (DD/MM/AAAA)",
+                                        placeholder="DD/MM/AAAA",
+                                        key="nuevo_fin_vigencia"
+                                    )
+                                    nueva_prima_anual = st.number_input(
+                                        "Nueva PRIMA ANUAL",
+                                        value=float(poliza_original.get('PRIMA ANUAL', 0)),
+                                        min_value=0.0,
+                                        format="%.2f",
+                                        key="nueva_prima_anual"
+                                    )
+                                
+                                with col_dup2:
+                                    nuevo_producto = st.text_input(
+                                        "PRODUCTO",
+                                        value=poliza_original.get('PRODUCTO', ''),
+                                        key="nuevo_producto"
+                                    )
+                                    nueva_aseguradora = st.text_input(
+                                        "ASEGURADORA",
+                                        value=poliza_original.get('ASEGURADORA', ''),
+                                        key="nueva_aseguradora"
+                                    )
+                                    nuevas_notas = st.text_area(
+                                        "NOTAS",
+                                        value=poliza_original.get('NOTAS', ''),
+                                        key="nuevas_notas"
+                                    )
+                                
+                                # Botón para duplicar
+                                duplicar_btn = st.form_submit_button("✅ Duplicar Póliza", type="primary")
+                                
+                                if duplicar_btn:
+                                    # Validar campos obligatorios
+                                    if not nuevo_no_poliza or not nuevo_inicio_vigencia or not nuevo_fin_vigencia:
+                                        st.error("❌ Por favor complete los campos obligatorios: Nuevo No. POLIZA, INICIO DE VIGENCIA y FIN DE VIGENCIA")
+                                    else:
+                                        # Preparar datos de la nueva póliza
+                                        nueva_poliza = [
+                                            poliza_original.get('No. Cliente', ''),  # Mismo ID de cliente
+                                            poliza_original.get('CONTRATANTE', ''),
+                                            poliza_original.get('ASEGURADO', ''),
+                                            poliza_original.get('BENEFICIARIO', ''),
+                                            poliza_original.get('FECHA DE NAC CONTRATANTE', ''),
+                                            poliza_original.get('FECHA DE NAC ASEGURADO', ''),
+                                            poliza_original.get('ESTADO CIVIL', ''),
+                                            nuevo_no_poliza,  # Nuevo número de póliza
+                                            nuevo_inicio_vigencia,  # Nueva fecha de inicio
+                                            nuevo_fin_vigencia,  # Nueva fecha de fin
+                                            poliza_original.get('FORMA DE PAGO', ''),
+                                            poliza_original.get('FRECUENCIA DE PAGO', ''),
+                                            nueva_prima_anual,  # Prima puede ser modificada
+                                            nuevo_producto,  # Producto puede ser modificado
+                                            poliza_original.get('No Serie Auto', ''),
+                                            nueva_aseguradora,  # Aseguradora puede ser modificada
+                                            poliza_original.get('DIRECCIÓN', ''),
+                                            poliza_original.get('TELEFONO', ''),
+                                            poliza_original.get('EMAIL', ''),
+                                            nuevas_notas,  # Notas pueden ser modificadas
+                                            poliza_original.get('DESCRIPCION AUTO', '')
+                                        ]
+                                        
+                                        if agregar_poliza(nueva_poliza):
+                                            st.success(f"✅ Póliza duplicada exitosamente! Nueva póliza: {nuevo_no_poliza}")
+                                            st.balloons()
+                                            st.rerun()
+                
                 # Descargar resultados
+                st.markdown("---")
                 csv = df_resultados.to_csv(index=False, encoding='utf-8')
                 st.download_button(
                     label="📥 Descargar resultados en CSV",
@@ -534,7 +646,7 @@ st.sidebar.markdown("---")
 st.sidebar.info("""
 **💡 Instrucciones:**
 - **Data Entry**: Completa los campos y haz clic en Guardar
-- **Consultar**: Busca por nombre del cliente  
+- **Consultar**: Busca por nombre del cliente y duplica pólizas  
 - **Vencimientos**: Revisa pólizas que vencerán pronto
 - **Ver Todo**: Explora toda la base de datos
 """)
