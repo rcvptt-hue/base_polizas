@@ -199,58 +199,6 @@ def obtener_polizas_proximas_vencer(dias=30):
         return []
 
 # ============================================================
-# FUNCIONES PARA MANEJO DE FECHAS
-# ============================================================
-def crear_campo_fecha(label, key, valor_default=None):
-    """Crea un campo de fecha que permite años anteriores a 2015"""
-    st.write(f"**{label}**")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        dia = st.number_input(f"Día {label}", min_value=1, max_value=31, value=1, key=f"dia_{key}")
-    with col2:
-        mes = st.selectbox(f"Mes {label}", 
-                          options=list(range(1, 13)),
-                          format_func=lambda x: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][x-1],
-                          key=f"mes_{key}")
-    with col3:
-        # Permitir años desde 1900 hasta el año actual + 10
-        año_actual = datetime.now().year
-        año = st.number_input(f"Año {label}", min_value=1900, max_value=año_actual + 10, value=1980, key=f"año_{key}")
-    
-    try:
-        fecha = datetime(año, mes, dia).date()
-        return fecha
-    except ValueError:
-        st.error(f"❌ Fecha inválida para {label}")
-        return None
-
-def crear_campo_fecha_simple(label, key, valor_default=None):
-    """Alternativa más simple usando text_input para fecha"""
-    if valor_default is None:
-        valor_default = "01/01/1980"
-    
-    fecha_texto = st.text_input(
-        label, 
-        value=valor_default,
-        placeholder="DD/MM/AAAA",
-        key=key,
-        help="Formato: DD/MM/AAAA (por ejemplo: 15/03/1975)"
-    )
-    
-    # Validar formato de fecha
-    if fecha_texto:
-        try:
-            fecha = datetime.strptime(fecha_texto, "%d/%m/%Y").date()
-            return fecha
-        except ValueError:
-            st.error(f"❌ Formato de fecha incorrecto para {label}. Use DD/MM/AAAA")
-            return None
-    return None
-
-# ============================================================
 # INICIALIZAR HOJA DE PÓLIZAS
 # ============================================================
 polizas_ws = ensure_sheet_exists(sheet, "Polizas", CAMPOS_POLIZA)
@@ -278,112 +226,156 @@ menu = st.sidebar.radio("Navegación", [
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
     
-    # Opción para elegir el tipo de entrada de fecha
-    metodo_fecha = st.radio("Método para ingresar fechas:", 
-                           ["📅 Selectores individuales (Día/Mes/Año)", "⌨️ Texto (DD/MM/AAAA)"],
-                           key="metodo_fecha")
+    # Inicializar estado de sesión para el formulario
+    if 'form_submitted' not in st.session_state:
+        st.session_state.form_submitted = False
     
-    with st.form("poliza_form", clear_on_submit=True):
+    # ID de cliente generado automáticamente
+    nuevo_id = generar_nuevo_id_cliente()
+    
+    # Crear contenedor para el formulario
+    form_container = st.container()
+    
+    with form_container:
         st.subheader("Información Básica")
         col1, col2 = st.columns(2)
         
         with col1:
-            # ID de cliente generado automáticamente
-            nuevo_id = generar_nuevo_id_cliente()
             st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
+            contratante = st.text_input("CONTRATANTE *", key="contratante_input")
+            asegurado = st.text_input("ASEGURADO *", key="asegurado_input")
+            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input")
             
-            contratante = st.text_input("CONTRATANTE *")
-            asegurado = st.text_input("ASEGURADO *")
-            beneficiario = st.text_input("BENEFICIARIO")
+            # Campos de fecha usando texto (más flexible para años anteriores)
+            fecha_nac_contratante = st.text_input(
+                "FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                key="fecha_nac_contratante_input"
+            )
             
-            # Campos de fecha de nacimiento según el método seleccionado
-            if metodo_fecha == "📅 Selectores individuales (Día/Mes/Año)":
-                st.write("FECHA DE NAC CONTRATANTE")
-                fecha_nac_contratante = crear_campo_fecha("Nacimiento Contratante", "nac_cont")
-                
-                st.write("FECHA DE NAC ASEGURADO")
-                fecha_nac_asegurado = crear_campo_fecha("Nacimiento Asegurado", "nac_aseg")
-            else:
-                fecha_nac_contratante = crear_campo_fecha_simple("FECHA DE NAC CONTRATANTE", "nac_cont_text")
-                fecha_nac_asegurado = crear_campo_fecha_simple("FECHA DE NAC ASEGURADO", "nac_aseg_text")
+            fecha_nac_asegurado = st.text_input(
+                "FECHA DE NAC ASEGURADO (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA", 
+                key="fecha_nac_asegurado_input"
+            )
             
-            estado_civil = st.selectbox("ESTADO CIVIL", ["", "Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"])
+            estado_civil = st.selectbox(
+                "ESTADO CIVIL", 
+                ["", "Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"],
+                key="estado_civil_select"
+            )
         
         with col2:
-            no_poliza = st.text_input("No. POLIZA *")
+            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input")
             
-            # Fechas de vigencia según el método seleccionado
-            if metodo_fecha == "📅 Selectores individuales (Día/Mes/Año)":
-                st.write("INICIO DE VIGENCIA *")
-                inicio_vigencia = crear_campo_fecha("Inicio Vigencia", "inicio_vig")
-                
-                st.write("FIN DE VIGENCIA *")
-                fin_vigencia = crear_campo_fecha("Fin Vigencia", "fin_vig")
-            else:
-                inicio_vigencia = crear_campo_fecha_simple("INICIO DE VIGENCIA *", "inicio_vig_text", "01/01/2024")
-                fin_vigencia = crear_campo_fecha_simple("FIN DE VIGENCIA *", "fin_vig_text", "31/12/2024")
+            inicio_vigencia = st.text_input(
+                "INICIO DE VIGENCIA * (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                key="inicio_vigencia_input"
+            )
             
-            forma_pago = st.selectbox("FORMA DE PAGO", ["", "Efectivo", "Tarjeta", "Transferencia", "Débito Automático"])
-            frecuencia_pago = st.selectbox("FRECUENCIA DE PAGO", ["", "Anual", "Semestral", "Trimestral", "Mensual"])
-            prima_anual = st.number_input("PRIMA ANUAL", min_value=0.0, format="%.2f")
-            producto = st.text_input("PRODUCTO")
+            fin_vigencia = st.text_input(
+                "FIN DE VIGENCIA * (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                key="fin_vigencia_input"
+            )
+            
+            forma_pago = st.selectbox(
+                "FORMA DE PAGO", 
+                ["", "Efectivo", "Tarjeta", "Transferencia", "Débito Automático"],
+                key="forma_pago_select"
+            )
+            
+            frecuencia_pago = st.selectbox(
+                "FRECUENCIA DE PAGO", 
+                ["", "Anual", "Semestral", "Trimestral", "Mensual"],
+                key="frecuencia_pago_select"
+            )
+            
+            prima_anual = st.number_input(
+                "PRIMA ANUAL", 
+                min_value=0.0, 
+                format="%.2f",
+                key="prima_anual_input"
+            )
+            
+            producto = st.text_input("PRODUCTO", key="producto_input")
         
         st.subheader("Información Adicional")
         col3, col4 = st.columns(2)
         
         with col3:
-            no_serie_auto = st.text_input("No Serie Auto")
-            aseguradora = st.text_input("ASEGURADORA")
-            direccion = st.text_area("DIRECCIÓN")
+            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input")
+            aseguradora = st.text_input("ASEGURADORA", key="aseguradora_input")
+            direccion = st.text_area("DIRECCIÓN", key="direccion_input")
         
         with col4:
-            telefono = st.text_input("TELEFONO")
-            email = st.text_input("EMAIL")
-            notas = st.text_area("NOTAS")
-            descripcion_auto = st.text_area("DESCRIPCION AUTO")
+            telefono = st.text_input("TELEFONO", key="telefono_input")
+            email = st.text_input("EMAIL", key="email_input")
+            notas = st.text_area("NOTAS", key="notas_input")
+            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input")
+    
+    # Botón fuera del contenedor del formulario para evitar envío con Enter
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    
+    with col_btn2:
+        guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary")
+    
+    if guardar_button:
+        # Validar campos obligatorios
+        campos_faltantes = []
+        if not contratante: campos_faltantes.append("CONTRATANTE")
+        if not asegurado: campos_faltantes.append("ASEGURADO")
+        if not no_poliza: campos_faltantes.append("No. POLIZA")
+        if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
+        if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
         
-        submitted = st.form_submit_button("💾 Guardar Póliza")
-        
-        if submitted:
-            # Validar campos obligatorios
-            campos_faltantes = []
-            if not contratante: campos_faltantes.append("CONTRATANTE")
-            if not asegurado: campos_faltantes.append("ASEGURADO")
-            if not no_poliza: campos_faltantes.append("No. POLIZA")
-            if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
-            if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
+        if campos_faltantes:
+            st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
+        else:
+            # Preparar datos para guardar
+            datos_poliza = [
+                str(nuevo_id),
+                contratante,
+                asegurado,
+                beneficiario,
+                fecha_nac_contratante,
+                fecha_nac_asegurado,
+                estado_civil,
+                no_poliza,
+                inicio_vigencia,
+                fin_vigencia,
+                forma_pago,
+                frecuencia_pago,
+                prima_anual,
+                producto,
+                no_serie_auto,
+                aseguradora,
+                direccion,
+                telefono,
+                email,
+                notas,
+                descripcion_auto
+            ]
             
-            if campos_faltantes:
-                st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
-            else:
-                # Preparar datos para guardar
-                datos_poliza = [
-                    str(nuevo_id),  # ID generado automáticamente
-                    contratante,
-                    asegurado,
-                    beneficiario,
-                    fecha_nac_contratante.strftime("%d/%m/%Y") if fecha_nac_contratante else "",
-                    fecha_nac_asegurado.strftime("%d/%m/%Y") if fecha_nac_asegurado else "",
-                    estado_civil,
-                    no_poliza,
-                    inicio_vigencia.strftime("%d/%m/%Y") if inicio_vigencia else "",
-                    fin_vigencia.strftime("%d/%m/%Y") if fin_vigencia else "",
-                    forma_pago,
-                    frecuencia_pago,
-                    prima_anual,
-                    producto,
-                    no_serie_auto,
-                    aseguradora,
-                    direccion,
-                    telefono,
-                    email,
-                    notas,
-                    descripcion_auto
-                ]
+            if agregar_poliza(datos_poliza):
+                st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
+                st.balloons()
                 
-                if agregar_poliza(datos_poliza):
-                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
-                    st.balloons()
+                # Limpiar el formulario usando session state
+                for key in st.session_state.keys():
+                    if key.endswith('_input') or key.endswith('_select'):
+                        if key not in ['no_cliente_auto']:  # No limpiar el ID
+                            st.session_state[key] = ""
+                
+                # Limpiar campos específicos
+                st.session_state.prima_anual_input = 0.0
+                st.session_state.estado_civil_select = ""
+                st.session_state.forma_pago_select = ""
+                st.session_state.frecuencia_pago_select = ""
+                
+                # Forzar rerun para actualizar la interfaz
+                st.rerun()
 
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE
@@ -541,10 +533,10 @@ elif menu == "📊 Ver Todas las Pólizas":
 st.sidebar.markdown("---")
 st.sidebar.info("""
 **💡 Instrucciones:**
-- **Data Entry**: El ID de cliente se genera automáticamente
-- **Consultar**: Busca por nombre del cliente en lista desplegable  
+- **Data Entry**: Completa los campos y haz clic en Guardar
+- **Consultar**: Busca por nombre del cliente  
 - **Vencimientos**: Revisa pólizas que vencerán pronto
-- **Ver Todo**: Explora y filtra toda la base de datos
+- **Ver Todo**: Explora toda la base de datos
 """)
 
 # Mostrar estadísticas rápidas en sidebar
@@ -566,3 +558,23 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
+# ============================================================
+# JAVASCRIPT PARA DESHABILITAR ENTER EN FORMULARIOS
+# ============================================================
+# Inyectar JavaScript para prevenir el envío del formulario con Enter
+st.markdown("""
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                return false;
+            }
+        });
+    });
+});
+</script>
+""", unsafe_allow_html=True)
