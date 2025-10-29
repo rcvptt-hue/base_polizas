@@ -26,7 +26,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # Cargamos las credenciales directamente desde los secrets
 creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
+    st.secrets["google_service_account"],
     scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
 
@@ -131,3 +131,4 @@ elif menu == "Ver Datos":
     st.subheader("📜 Pólizas")
     polizas = pd.DataFrame(polizas_ws.get_all_records())
     st.dataframe(polizas if not polizas.empty else pd.DataFrame(columns=["Nombre", "Correo", "Teléfono", "Producto"]))
+
