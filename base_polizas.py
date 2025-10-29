@@ -5,6 +5,8 @@ import pandas as pd
 import ssl
 from datetime import datetime, timedelta
 import io
+import time
+from functools import lru_cache
 
 # ============================================================
 # CONFIGURACIÓN INICIAL
@@ -19,10 +21,10 @@ st.set_page_config(
 )
 
 # ============================================================
-# CONFIGURACIÓN DE GOOGLE SHEETS
+# CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
 # ============================================================
 def init_google_sheets():
-    """Inicializa la conexión con Google Sheets"""
+    """Inicializa la conexión con Google Sheets con manejo de errores"""
     try:
         if 'google_service_account' not in st.secrets:
             st.error("❌ No se encontró 'google_service_account' en los secrets de Streamlit")
@@ -47,19 +49,37 @@ if client is None:
     st.stop()
 
 # ============================================================
-# CONFIGURACIÓN DE LA HOJA DE CÁLCULO
+# CONFIGURACIÓN DE LA HOJA DE CÁLCULO CON REINTENTOS
 # ============================================================
 SPREADSHEET_NAME = "base_poliza"
 
-try:
-    sheet = client.open(SPREADSHEET_NAME)
-    st.sidebar.success("✅ Conectado a Google Sheets")
-except gspread.SpreadsheetNotFound:
-    st.error(f"❌ No se encontró el archivo '{SPREADSHEET_NAME}' en tu cuenta de Google.")
-    st.stop()
-except Exception as e:
-    st.error(f"❌ Error al abrir la hoja de cálculo: {str(e)}")
-    st.stop()
+@st.cache_resource(show_spinner=False)
+def get_sheet_with_retry():
+    """Obtiene la hoja de cálculo con reintentos en caso de error de cuota"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            sheet = client.open(SPREADSHEET_NAME)
+            st.sidebar.success("✅ Conectado a Google Sheets")
+            return sheet
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + 2  # Exponential backoff
+                st.warning(f"⏳ Límite de API excedido. Reintentando en {wait_time} segundos...")
+                time.sleep(wait_time)
+                continue
+            else:
+                st.error(f"❌ Error al abrir la hoja de cálculo después de {max_retries} intentos: {str(e)}")
+                st.stop()
+        except gspread.SpreadsheetNotFound:
+            st.error(f"❌ No se encontró el archivo '{SPREADSHEET_NAME}' en tu cuenta de Google.")
+            st.stop()
+        except Exception as e:
+            st.error(f"❌ Error inesperado al abrir la hoja de cálculo: {str(e)}")
+            st.stop()
+
+# Obtener la hoja con manejo de reintentos
+sheet = get_sheet_with_retry()
 
 # ============================================================
 # DEFINICIÓN DE CAMPOS
@@ -73,31 +93,67 @@ CAMPOS_POLIZA = [
 ]
 
 # ============================================================
-# FUNCIONES PRINCIPALES
+# FUNCIONES PRINCIPALES CON CACHE Y REINTENTOS
 # ============================================================
 def ensure_sheet_exists(sheet, title, headers):
     """Crea la hoja si no existe, con los encabezados dados."""
-    try:
-        worksheet = sheet.worksheet(title)
-        # Verificar encabezados existentes
-        existing_headers = worksheet.row_values(1)
-        if existing_headers != headers:
-            st.warning(f"⚠️ Los encabezados en '{title}' no coinciden. Se usarán los existentes.")
-    except gspread.WorksheetNotFound:
-        worksheet = sheet.add_worksheet(title=title, rows="1000", cols=str(len(headers)))
-        worksheet.append_row(headers)
-    except Exception as e:
-        st.error(f"❌ Error al crear/verificar la hoja {title}: {str(e)}")
-        return None
-    return worksheet
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            worksheet = sheet.worksheet(title)
+            # Verificar encabezados existentes
+            existing_headers = worksheet.row_values(1)
+            if existing_headers != headers:
+                st.warning(f"⚠️ Los encabezados en '{title}' no coinciden. Se usarán los existentes.")
+            return worksheet
+        except gspread.WorksheetNotFound:
+            try:
+                worksheet = sheet.add_worksheet(title=title, rows="1000", cols=str(len(headers)))
+                worksheet.append_row(headers)
+                return worksheet
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                else:
+                    st.error(f"❌ Error al crear/verificar la hoja {title}: {str(e)}")
+                    return None
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"❌ Error de API al crear/verificar la hoja {title}: {str(e)}")
+                return None
+        except Exception as e:
+            st.error(f"❌ Error inesperado al crear/verificar la hoja {title}: {str(e)}")
+            return None
+
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def obtener_polizas_cached():
+    """Obtiene todas las pólizas como lista de diccionarios (con cache)"""
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            return polizas_ws.get_all_records()
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"❌ Error al obtener pólizas: {str(e)}")
+                return []
+        except Exception as e:
+            st.error(f"❌ Error inesperado al obtener pólizas: {str(e)}")
+            return []
 
 def obtener_polizas():
-    """Obtiene todas las pólizas como lista de diccionarios"""
-    try:
-        return polizas_ws.get_all_records()
-    except Exception as e:
-        st.error(f"❌ Error al obtener pólizas: {str(e)}")
-        return []
+    """Wrapper para obtener pólizas que puede limpiar cache si es necesario"""
+    return obtener_polizas_cached()
+
+def clear_polizas_cache():
+    """Limpia el cache de pólizas"""
+    st.cache_data.clear()
 
 def obtener_ultimo_id_cliente():
     """Obtiene el último ID de cliente utilizado"""
@@ -122,8 +178,9 @@ def generar_nuevo_id_cliente():
     ultimo_id = obtener_ultimo_id_cliente()
     return ultimo_id + 1
 
-def obtener_clientes_unicos():
-    """Obtiene lista de clientes únicos para el dropdown"""
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def obtener_clientes_unicos_cached():
+    """Obtiene lista de clientes únicos para el dropdown (con cache)"""
     try:
         polizas = obtener_polizas()
         if not polizas:
@@ -142,6 +199,10 @@ def obtener_clientes_unicos():
         st.error(f"❌ Error al obtener clientes: {str(e)}")
         return []
 
+def obtener_clientes_unicos():
+    """Wrapper para obtener clientes únicos"""
+    return obtener_clientes_unicos_cached()
+
 def buscar_por_nombre_cliente(nombre_cliente):
     """Busca pólizas por nombre del cliente"""
     try:
@@ -153,19 +214,33 @@ def buscar_por_nombre_cliente(nombre_cliente):
         return []
 
 def agregar_poliza(datos):
-    """Agrega una nueva póliza a la hoja"""
-    try:
-        # Convertir todos los valores a string para evitar problemas
-        datos_str = [str(dato) if dato is not None else "" for dato in datos]
-        polizas_ws.append_row(datos_str)
-        return True
-    except Exception as e:
-        st.error(f"❌ Error al agregar póliza: {str(e)}")
-        st.error(f"📋 Datos que se intentaron guardar: {datos_str}")
-        return False
+    """Agrega una nueva póliza a la hoja con manejo de reintentos"""
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            # Convertir todos los valores a string para evitar problemas
+            datos_str = [str(dato) if dato is not None else "" for dato in datos]
+            polizas_ws.append_row(datos_str)
+            
+            # Limpiar cache después de agregar nueva póliza
+            clear_polizas_cache()
+            
+            return True
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"❌ Error al agregar póliza: {str(e)}")
+                st.error(f"📋 Datos que se intentaron guardar: {datos_str}")
+                return False
+        except Exception as e:
+            st.error(f"❌ Error inesperado al agregar póliza: {str(e)}")
+            return False
 
+@st.cache_data(ttl=600)  # Cache por 10 minutos para vencimientos
 def obtener_polizas_proximas_vencer(dias=30):
-    """Obtiene pólizas que vencen en los próximos N días"""
+    """Obtiene pólizas que vencen en los próximos N días (con cache)"""
     try:
         polizas = obtener_polizas()
         hoy = datetime.now().date()
@@ -223,15 +298,17 @@ menu = st.sidebar.radio("Navegación", [
     "📊 Ver Todas las Pólizas"
 ])
 
+# Botón para limpiar cache manualmente
+if st.sidebar.button("🔄 Limpiar Cache"):
+    clear_polizas_cache()
+    st.sidebar.success("✅ Cache limpiado correctamente")
+    st.rerun()
+
 # ============================================================
 # 1. DATA ENTRY - NUEVA PÓLIZA
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
-    
-    # Inicializar estado de sesión para el formulario
-    if 'form_submitted' not in st.session_state:
-        st.session_state.form_submitted = False
     
     # ID de cliente generado automáticamente
     nuevo_id = generar_nuevo_id_cliente()
@@ -397,8 +474,12 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
         st.session_state.poliza_a_duplicar = None
     
     # Obtener lista de clientes únicos para el dropdown
-    with st.spinner("Cargando lista de clientes..."):
+    try:
         clientes = obtener_clientes_unicos()
+    except Exception as e:
+        st.error(f"❌ Error al cargar lista de clientes: {str(e)}")
+        st.info("🔄 Intentando cargar datos desde cache...")
+        clientes = []
     
     if not clientes:
         st.info("ℹ️ No hay clientes registrados en el sistema")
@@ -429,11 +510,14 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
         # Manejar la búsqueda
         if buscar_btn and cliente_seleccionado:
             with st.spinner("Buscando pólizas..."):
-                resultados = buscar_por_nombre_cliente(cliente_seleccionado)
-                st.session_state.cliente_buscado = cliente_seleccionado
-                st.session_state.resultados_busqueda = resultados
-                st.session_state.mostrar_duplicacion = False
-                st.session_state.poliza_a_duplicar = None
+                try:
+                    resultados = buscar_por_nombre_cliente(cliente_seleccionado)
+                    st.session_state.cliente_buscado = cliente_seleccionado
+                    st.session_state.resultados_busqueda = resultados
+                    st.session_state.mostrar_duplicacion = False
+                    st.session_state.poliza_a_duplicar = None
+                except Exception as e:
+                    st.error(f"❌ Error al buscar pólizas: {str(e)}")
         
         # Mostrar resultados si hay una búsqueda activa
         if st.session_state.cliente_buscado and st.session_state.resultados_busqueda:
@@ -589,8 +673,6 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                     mime="text/csv",
                     key="descargar_csv_btn"
                 )
-            else:
-                st.warning(f"ℹ️ No se encontraron pólizas para el cliente {cliente_seleccionado}")
 
 # ============================================================
 # 3. PÓLIZAS PRÓXIMAS A VENCER
@@ -700,6 +782,11 @@ st.sidebar.info("""
 - **Consultar**: Busca por nombre del cliente y duplica pólizas  
 - **Vencimientos**: Revisa pólizas que vencerán pronto
 - **Ver Todo**: Explora toda la base de datos
+
+**🔄 Si ves errores de cuota:**
+- Usa el botón "Limpiar Cache"
+- Espera unos minutos antes de continuar
+- Los datos se cachean para reducir llamadas a la API
 """)
 
 # Mostrar estadísticas rápidas en sidebar
