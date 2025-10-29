@@ -36,7 +36,7 @@ client = gspread.authorize(creds)
 # ============================================================
 # CONECTAR A TU GOOGLE SHEET
 # ============================================================
-SPREADSHEET_NAME = "base_polizas"
+SPREADSHEET_NAME = "base_poliza"
 
 try:
     sheet = client.open(SPREADSHEET_NAME)
@@ -131,4 +131,5 @@ elif menu == "Ver Datos":
     st.subheader("📜 Pólizas")
     polizas = pd.DataFrame(polizas_ws.get_all_records())
     st.dataframe(polizas if not polizas.empty else pd.DataFrame(columns=["Nombre", "Correo", "Teléfono", "Producto"]))
+
 
