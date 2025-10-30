@@ -458,7 +458,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 st.rerun()
 
 # ============================================================
-# 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN)
+# 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
 elif menu == "🔍 Consultar Pólizas por Cliente":
     st.header("🔍 Consultar Pólizas por Cliente")
@@ -472,6 +472,10 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
         st.session_state.mostrar_duplicacion = False
     if 'poliza_a_duplicar' not in st.session_state:
         st.session_state.poliza_a_duplicar = None
+    if 'mostrar_eliminacion' not in st.session_state:
+        st.session_state.mostrar_eliminacion = False
+    if 'poliza_a_eliminar' not in st.session_state:
+        st.session_state.poliza_a_eliminar = None
     
     # Obtener lista de clientes únicos para el dropdown
     try:
@@ -505,6 +509,8 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                         st.session_state.resultados_busqueda = []
                         st.session_state.mostrar_duplicacion = False
                         st.session_state.poliza_a_duplicar = None
+                        st.session_state.mostrar_eliminacion = False
+                        st.session_state.poliza_a_eliminar = None
                         st.rerun()
         
         # Manejar la búsqueda
@@ -516,6 +522,8 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                     st.session_state.resultados_busqueda = resultados
                     st.session_state.mostrar_duplicacion = False
                     st.session_state.poliza_a_duplicar = None
+                    st.session_state.mostrar_eliminacion = False
+                    st.session_state.poliza_a_eliminar = None
                 except Exception as e:
                     st.error(f"❌ Error al buscar pólizas: {str(e)}")
         
@@ -540,7 +548,91 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                 st.dataframe(df_resultados, use_container_width=True)
             
             # ============================================================
-            # NUEVA FUNCIONALIDAD: DUPLICAR PÓLIZA
+            # NUEVA FUNCIONALIDAD: ELIMINAR PÓLIZA
+            # ============================================================
+            st.markdown("---")
+            st.subheader("🗑️ Eliminar Póliza")
+            
+            # Seleccionar póliza a eliminar
+            polizas_para_eliminar = [f"{p['No. POLIZA']} - {p['PRODUCTO']} (Vence: {p.get('FIN DE VIGENCIA', 'N/A')})" 
+                                   for p in resultados]
+            
+            if polizas_para_eliminar:
+                # Usar un contenedor para agrupar la selección de póliza a eliminar
+                with st.container():
+                    poliza_eliminar_idx = st.selectbox(
+                        "Selecciona la póliza a eliminar:",
+                        options=range(len(polizas_para_eliminar)),
+                        format_func=lambda x: polizas_para_eliminar[x],
+                        key="select_poliza_eliminar_idx"
+                    )
+                    
+                    seleccionar_eliminar_btn = st.button("📝 Seleccionar para Eliminar", key="seleccionar_eliminar_btn")
+                    
+                    if seleccionar_eliminar_btn and poliza_eliminar_idx is not None:
+                        st.session_state.mostrar_eliminacion = True
+                        st.session_state.poliza_a_eliminar = resultados[poliza_eliminar_idx]
+                
+                # Mostrar confirmación de eliminación si está activo
+                if st.session_state.mostrar_eliminacion and st.session_state.poliza_a_eliminar:
+                    poliza_eliminar = st.session_state.poliza_a_eliminar
+                    
+                    st.warning(f"⚠️ **ESTÁS A PUNTO DE ELIMINAR LA SIGUIENTE PÓLIZA:**")
+                    st.error(f"**No. Póliza:** {poliza_eliminar['No. POLIZA']}")
+                    st.error(f"**Producto:** {poliza_eliminar['PRODUCTO']}")
+                    st.error(f"**Cliente:** {poliza_eliminar['CONTRATANTE']}")
+                    st.error(f"**Vigencia:** {poliza_eliminar.get('INICIO DE VIGENCIA', 'N/A')} - {poliza_eliminar.get('FIN DE VIGENCIA', 'N/A')}")
+                    
+                    # Mostrar más detalles de la póliza a eliminar
+                    with st.expander("📋 Ver todos los detalles de la póliza a eliminar"):
+                        st.write(poliza_eliminar)
+                    
+                    col_elim1, col_elim2, col_elim3 = st.columns([1, 2, 1])
+                    with col_elim2:
+                        confirmar_eliminar_btn = st.button("🗑️ CONFIRMAR ELIMINACIÓN", 
+                                                         type="primary", 
+                                                         key="confirmar_eliminar_btn",
+                                                         use_container_width=True)
+                    
+                    if confirmar_eliminar_btn:
+                        # Función para eliminar póliza
+                        def eliminar_poliza(numero_poliza):
+                            try:
+                                # Obtener todas las pólizas
+                                todas_polizas = polizas_ws.get_all_records()
+                                
+                                # Encontrar la fila a eliminar
+                                for i, poliza in enumerate(todas_polizas, start=2):  # start=2 porque fila 1 son encabezados
+                                    if poliza.get('No. POLIZA') == numero_poliza:
+                                        # Eliminar la fila
+                                        polizas_ws.delete_rows(i)
+                                        
+                                        # Limpiar cache después de eliminar
+                                        clear_polizas_cache()
+                                        return True
+                                return False
+                            except Exception as e:
+                                st.error(f"❌ Error al eliminar póliza: {str(e)}")
+                                return False
+                        
+                        if eliminar_poliza(poliza_eliminar['No. POLIZA']):
+                            st.success(f"✅ Póliza {poliza_eliminar['No. POLIZA']} eliminada exitosamente!")
+                            
+                            # Resetear estado de eliminación y actualizar resultados
+                            st.session_state.mostrar_eliminacion = False
+                            st.session_state.poliza_a_eliminar = None
+                            
+                            # Actualizar la lista de resultados
+                            with st.spinner("Actualizando lista de pólizas..."):
+                                nuevos_resultados = buscar_por_nombre_cliente(cliente_seleccionado)
+                                st.session_state.resultados_busqueda = nuevos_resultados
+                            
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al eliminar la póliza. Por favor intenta nuevamente.")
+            
+            # ============================================================
+            # FUNCIONALIDAD EXISTENTE: DUPLICAR PÓLIZA
             # ============================================================
             st.markdown("---")
             st.subheader("🔄 Duplicar Póliza")
@@ -808,3 +900,4 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
