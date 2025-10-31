@@ -313,6 +313,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
     # ID de cliente generado automáticamente
     nuevo_id = generar_nuevo_id_cliente()
     
+    # Lista de aseguradoras predefinidas
+    ASEGURADORAS = [
+        "ALLIANZ",
+        "ANA SEGUROS", 
+        "BX+",
+        "EL AGUILA",
+        "INSIGNIA LIFE",
+        "MAPFRE",
+        "QUALITAS"
+    ]
+    
+    # NUEVO: Opciones actualizadas para estado civil
+    OPCIONES_ESTADO_CIVIL = [
+        "",
+        "SOLTERO/A",
+        "CASADO/A", 
+        "DIVORCIADO/A",
+        "SEPARADO/A",
+        "UNIÓN LIBRE",
+        "VIUDO/A"
+    ]
+    
     # Crear contenedor para el formulario
     form_container = st.container()
     
@@ -339,9 +361,10 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 key="fecha_nac_asegurado_input"
             )
             
+            # CAMBIO: Opciones actualizadas para estado civil
             estado_civil = st.selectbox(
                 "ESTADO CIVIL", 
-                ["", "Soltero", "Casado", "Divorciado", "Viudo", "Unión Libre"],
+                options=OPCIONES_ESTADO_CIVIL,
                 key="estado_civil_select"
             )
         
@@ -360,16 +383,18 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 key="fin_vigencia_input"
             )
             
-            forma_pago = st.selectbox(
+            # CAMBIO: Entrada de texto en vez de lista desplegable para FORMA DE PAGO
+            forma_pago = st.text_input(
                 "FORMA DE PAGO", 
-                ["", "Efectivo", "Tarjeta", "Transferencia", "Débito Automático"],
-                key="forma_pago_select"
+                placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
+                key="forma_pago_input"
             )
             
-            frecuencia_pago = st.selectbox(
+            # CAMBIO: Entrada de texto en vez de lista desplegable para FRECUENCIA DE PAGO
+            frecuencia_pago = st.text_input(
                 "FRECUENCIA DE PAGO", 
-                ["", "Anual", "Semestral", "Trimestral", "Mensual"],
-                key="frecuencia_pago_select"
+                placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
+                key="frecuencia_pago_input"
             )
             
             prima_anual = st.number_input(
@@ -386,7 +411,14 @@ if menu == "📝 Data Entry - Nueva Póliza":
         
         with col3:
             no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input")
-            aseguradora = st.text_input("ASEGURADORA", key="aseguradora_input")
+            
+            # CAMBIO: Lista desplegable de aseguradoras predefinidas
+            aseguradora = st.selectbox(
+                "ASEGURADORA",
+                options=ASEGURADORAS,
+                key="aseguradora_select"
+            )
+            
             direccion = st.text_area("DIRECCIÓN", key="direccion_input")
         
         with col4:
@@ -462,6 +494,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
 # ============================================================
 elif menu == "🔍 Consultar Pólizas por Cliente":
     st.header("🔍 Consultar Pólizas por Cliente")
+    
+    # Lista de aseguradoras predefinidas (misma que en Data Entry)
+    ASEGURADORAS = [
+        "ALLIANZ",
+        "ANA SEGUROS", 
+        "BX+",
+        "EL AGUILA",
+        "INSIGNIA LIFE",
+        "MAPFRE",
+        "QUALITAS"
+    ]
+    
+    # NUEVO: Opciones actualizadas para estado civil (misma que en Data Entry)
+    OPCIONES_ESTADO_CIVIL = [
+        "",
+        "SOLTERO/A",
+        "CASADO/A", 
+        "DIVORCIADO/A",
+        "SEPARADO/A",
+        "UNIÓN LIBRE",
+        "VIUDO/A"
+    ]
     
     # Inicializar estados de sesión
     if 'cliente_buscado' not in st.session_state:
@@ -632,7 +686,7 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                             st.error("❌ Error al eliminar la póliza. Por favor intenta nuevamente.")
             
             # ============================================================
-            # FUNCIONALIDAD EXISTENTE: DUPLICAR PÓLIZA
+            # FUNCIONALIDAD EXISTENTE: DUPLICAR PÓLIZA (CON MODIFICACIONES)
             # ============================================================
             st.markdown("---")
             st.subheader("🔄 Duplicar Póliza")
@@ -685,6 +739,15 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                                 placeholder="DD/MM/AAAA",
                                 key="nuevo_fin_vigencia_form"
                             )
+                            
+                            # NUEVO: Campo para modificar forma de pago en duplicación
+                            nueva_forma_pago = st.text_input(
+                                "FORMA DE PAGO",
+                                value=poliza_original.get('FORMA DE PAGO', ''),
+                                placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
+                                key="nueva_forma_pago_form"
+                            )
+                            
                             nueva_prima_anual = st.number_input(
                                 "Nueva PRIMA ANUAL",
                                 value=float(poliza_original.get('PRIMA ANUAL', 0) or 0),
@@ -699,11 +762,29 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                                 value=poliza_original.get('PRODUCTO', ''),
                                 key="nuevo_producto_form"
                             )
-                            nueva_aseguradora = st.text_input(
+                            
+                            # CAMBIO: Lista desplegable de aseguradoras predefinidas en duplicación
+                            nueva_aseguradora = st.selectbox(
                                 "ASEGURADORA",
-                                value=poliza_original.get('ASEGURADORA', ''),
+                                options=ASEGURADORAS,
                                 key="nueva_aseguradora_form"
                             )
+                            
+                            # NUEVO: Campo para modificar frecuencia de pago en duplicación
+                            nueva_frecuencia_pago = st.text_input(
+                                "FRECUENCIA DE PAGO",
+                                value=poliza_original.get('FRECUENCIA DE PAGO', ''),
+                                placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
+                                key="nueva_frecuencia_pago_form"
+                            )
+                            
+                            # NUEVO: Campo para modificar estado civil en duplicación
+                            nuevo_estado_civil = st.selectbox(
+                                "ESTADO CIVIL",
+                                options=OPCIONES_ESTADO_CIVIL,
+                                key="nuevo_estado_civil_form"
+                            )
+                            
                             nuevas_notas = st.text_area(
                                 "NOTAS",
                                 value=poliza_original.get('NOTAS', ''),
@@ -728,16 +809,16 @@ elif menu == "🔍 Consultar Pólizas por Cliente":
                                     poliza_original.get('BENEFICIARIO', ''),
                                     poliza_original.get('FECHA DE NAC CONTRATANTE', ''),
                                     poliza_original.get('FECHA DE NAC ASEGURADO', ''),
-                                    poliza_original.get('ESTADO CIVIL', ''),
+                                    nuevo_estado_civil,  # NUEVO: Estado civil modificable
                                     nuevo_no_poliza,  # Nuevo número de póliza
                                     nuevo_inicio_vigencia,  # Nueva fecha de inicio
                                     nuevo_fin_vigencia,  # Nueva fecha de fin
-                                    poliza_original.get('FORMA DE PAGO', ''),
-                                    poliza_original.get('FRECUENCIA DE PAGO', ''),
+                                    nueva_forma_pago,  # NUEVO: Forma de pago modificable
+                                    nueva_frecuencia_pago,  # NUEVO: Frecuencia de pago modificable
                                     str(nueva_prima_anual),  # Prima puede ser modificada
                                     nuevo_producto,  # Producto puede ser modificado
                                     poliza_original.get('No Serie Auto', ''),
-                                    nueva_aseguradora,  # Aseguradora puede ser modificada
+                                    nueva_aseguradora,  # Aseguradora puede ser modificada (ahora es lista desplegable)
                                     poliza_original.get('DIRECCIÓN', ''),
                                     poliza_original.get('TELEFONO', ''),
                                     poliza_original.get('EMAIL', ''),
@@ -900,4 +981,5 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
