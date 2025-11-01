@@ -906,26 +906,30 @@ elif menu == "📊 Ver Todas las Pólizas":
         # Filtros
         col1, col2, col3 = st.columns(3)
         with col1:
-            # CORRECCIÓN: Sintaxis corregida para el filtro de producto
+            # CORRECCIÓN: Manejo seguro de valores únicos para producto
             if 'PRODUCTO' in df_todas.columns:
-                opciones_producto = [""] + sorted(df_todas['PRODUCTO'].unique())
+                # Convertir a string y eliminar valores NaN antes de ordenar
+                productos_unicos = df_todas['PRODUCTO'].dropna().astype(str).unique()
+                opciones_producto = [""] + sorted(productos_unicos)
             else:
                 opciones_producto = [""]
             filtro_producto = st.selectbox("Filtrar por Producto", opciones_producto)
             
         with col2:
-            # CORRECCIÓN: Sintaxis corregida para el filtro de aseguradora
+            # CORRECCIÓN: Manejo seguro de valores únicos para aseguradora
             if 'ASEGURADORA' in df_todas.columns:
-                opciones_aseguradora = [""] + sorted(df_todas['ASEGURADORA'].unique())
+                # Convertir a string y eliminar valores NaN antes de ordenar
+                aseguradoras_unicas = df_todas['ASEGURADORA'].dropna().astype(str).unique()
+                opciones_aseguradora = [""] + sorted(aseguradoras_unicas)
             else:
                 opciones_aseguradora = [""]
             filtro_aseguradora = st.selectbox("Filtrar por Aseguradora", opciones_aseguradora)
         
         # Aplicar filtros
         if filtro_producto:
-            df_todas = df_todas[df_todas['PRODUCTO'] == filtro_producto]
+            df_todas = df_todas[df_todas['PRODUCTO'].astype(str) == filtro_producto]
         if filtro_aseguradora:
-            df_todas = df_todas[df_todas['ASEGURADORA'] == filtro_aseguradora]
+            df_todas = df_todas[df_todas['ASEGURADORA'].astype(str) == filtro_aseguradora]
         
         # Mostrar datos
         st.dataframe(df_todas, use_container_width=True)
@@ -939,7 +943,15 @@ elif menu == "📊 Ver Todas las Pólizas":
             st.metric("Clientes Únicos", df_todas['No. Cliente'].nunique() if 'No. Cliente' in df_todas.columns else 0)
         with col3:
             if 'PRIMA ANUAL' in df_todas.columns:
-                st.metric("Prima Anual Total", f"${df_todas['PRIMA ANUAL'].sum():,.2f}")
+                # CORRECCIÓN: Manejo robusto de la suma de primas
+                try:
+                    # Convertir a numérico, forzando errores a NaN y luego llenando con 0
+                    primas_numericas = pd.to_numeric(df_todas['PRIMA ANUAL'], errors='coerce').fillna(0)
+                    prima_total = primas_numericas.sum()
+                    st.metric("Prima Anual Total", f"${prima_total:,.2f}")
+                except Exception as e:
+                    st.metric("Prima Anual Total", "Error")
+                    st.error(f"❌ Error al calcular prima total: {str(e)}")
         with col4:
             if 'PRODUCTO' in df_todas.columns:
                 st.metric("Productos Diferentes", df_todas['PRODUCTO'].nunique())
@@ -991,6 +1003,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
