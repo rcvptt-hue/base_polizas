@@ -906,9 +906,20 @@ elif menu == "📊 Ver Todas las Pólizas":
         # Filtros
         col1, col2, col3 = st.columns(3)
         with col1:
-            filtro_producto = st.selectbox("Filtrar por Producto", [""] + sorted(df_todas['PRODUCTO'].unique() if 'PRODUCTO' in df_todas.columns else []))
+            # CORRECCIÓN: Sintaxis corregida para el filtro de producto
+            if 'PRODUCTO' in df_todas.columns:
+                opciones_producto = [""] + sorted(df_todas['PRODUCTO'].unique())
+            else:
+                opciones_producto = [""]
+            filtro_producto = st.selectbox("Filtrar por Producto", opciones_producto)
+            
         with col2:
-            filtro_aseguradora = st.selectbox("Filtrar por Aseguradora", [""] + sorted(df_todas['ASEGURADORA'].unique() if 'ASEGURADORA' in df_todas.columns else []))
+            # CORRECCIÓN: Sintaxis corregida para el filtro de aseguradora
+            if 'ASEGURADORA' in df_todas.columns:
+                opciones_aseguradora = [""] + sorted(df_todas['ASEGURADORA'].unique())
+            else:
+                opciones_aseguradora = [""]
+            filtro_aseguradora = st.selectbox("Filtrar por Aseguradora", opciones_aseguradora)
         
         # Aplicar filtros
         if filtro_producto:
@@ -944,7 +955,6 @@ elif menu == "📊 Ver Todas las Pólizas":
         )
     else:
         st.info("ℹ️ No hay pólizas registradas en el sistema")
-
 # ============================================================
 # INFORMACIÓN ADICIONAL EN SIDEBAR
 # ============================================================
@@ -981,5 +991,6 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
