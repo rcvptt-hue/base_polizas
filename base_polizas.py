@@ -134,6 +134,22 @@ def obtener_polizas_cached():
 def obtener_polizas():
     return obtener_polizas_cached()
 
+@st.cache_data(ttl=300)
+def obtener_cancelaciones_cached():
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            return cancelaciones_ws.get_all_records()
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                return []
+
+def obtener_cancelaciones():
+    return obtener_cancelaciones_cached()
+
 def clear_polizas_cache():
     st.cache_data.clear()
 
@@ -157,6 +173,35 @@ def generar_nuevo_id_cliente():
     ultimo_id = obtener_ultimo_id_cliente()
     return ultimo_id + 1
 
+@st.cache_data(ttl=300)
+def obtener_clientes_unicos_cached():
+    try:
+        polizas = obtener_polizas()
+        if not polizas:
+            return []
+        
+        clientes = {}
+        for poliza in polizas:
+            contratante = poliza.get("CONTRATANTE", "")
+            id_cliente = poliza.get("No. Cliente", "")
+            if contratante:
+                clientes[contratante] = id_cliente
+        
+        return sorted(clientes.keys())
+    except Exception:
+        return []
+
+def obtener_clientes_unicos():
+    return obtener_clientes_unicos_cached()
+
+def buscar_por_nombre_cliente(nombre_cliente):
+    try:
+        polizas = obtener_polizas()
+        resultados = [p for p in polizas if p.get("CONTRATANTE", "") == nombre_cliente]
+        return resultados
+    except Exception:
+        return []
+
 def agregar_poliza(datos):
     max_retries = 2
     for attempt in range(max_retries):
@@ -172,12 +217,105 @@ def agregar_poliza(datos):
             else:
                 return False
 
+def mover_a_cancelaciones(datos):
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            datos_str = [str(dato) if dato is not None else "" for dato in datos]
+            cancelaciones_ws.append_row(datos_str)
+            clear_polizas_cache()
+            return True
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            else:
+                return False
+
+@st.cache_data(ttl=600)
+def obtener_polizas_proximas_vencer(dias=30):
+    try:
+        polizas = obtener_polizas()
+        hoy = datetime.now().date()
+        fecha_limite = hoy + timedelta(days=dias)
+        
+        polizas_proximas = []
+        
+        for poliza in polizas:
+            fecha_fin = poliza.get("FIN DE VIGENCIA", "")
+            if fecha_fin:
+                try:
+                    if isinstance(fecha_fin, str):
+                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                            try:
+                                fecha_fin_dt = datetime.strptime(fecha_fin, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                        else:
+                            continue
+                    else:
+                        continue
+                    
+                    if hoy <= fecha_fin_dt <= fecha_limite:
+                        polizas_proximas.append(poliza)
+                        
+                except Exception:
+                    continue
+        
+        return polizas_proximas
+    except Exception as e:
+        return []
+
+def obtener_cumpleaños_mes_actual():
+    try:
+        polizas = obtener_polizas()
+        mes_actual = datetime.now().month
+        
+        cumpleaños_mes = []
+        
+        for poliza in polizas:
+            fecha_nac = poliza.get("FECHA DE NAC CONTRATANTE", "")
+            contratante = poliza.get("CONTRATANTE", "")
+            
+            if fecha_nac and contratante:
+                try:
+                    for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y']:
+                        try:
+                            fecha_nac_dt = datetime.strptime(fecha_nac, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        continue
+                    
+                    if fecha_nac_dt.month == mes_actual:
+                        cumpleaños_mes.append({
+                            "CONTRATANTE": contratante,
+                            "FECHA DE NACIMIENTO": fecha_nac_dt.strftime('%d/%m/%Y'),
+                            "DÍA": fecha_nac_dt.day
+                        })
+                        
+                except Exception:
+                    continue
+        
+        cumpleaños_mes.sort(key=lambda x: x["DÍA"])
+        return cumpleaños_mes
+        
+    except Exception as e:
+        return []
+
 # ============================================================
 # INICIALIZAR HOJAS DE TRABAJO
 # ============================================================
 polizas_ws = ensure_sheet_exists(sheet, "Polizas", CAMPOS_POLIZA)
 if polizas_ws is None:
     st.error("❌ No se pudo inicializar la hoja de pólizas")
+    st.stop()
+
+cancelaciones_ws = ensure_sheet_exists(sheet, "Cancelaciones", CAMPOS_POLIZA)
+if cancelaciones_ws is None:
+    st.error("❌ No se pudo inicializar la hoja de cancelaciones")
     st.stop()
 
 # ============================================================
@@ -189,8 +327,15 @@ st.markdown("---")
 menu = st.sidebar.radio("Navegación", [
     "📝 Data Entry - Nueva Póliza", 
     "🔍 Consultar Pólizas por Cliente", 
-    "📊 Ver Todas las Pólizas"
+    "⏳ Pólizas Próximas a Vencer",
+    "📊 Ver Todas las Pólizas",
+    "🎂 Cumpleaños del Mes",
+    "🗑️ Ver Cancelaciones"
 ])
+
+if st.sidebar.button("🔄 Limpiar Cache"):
+    clear_polizas_cache()
+    st.rerun()
 
 # ============================================================
 # DATA ENTRY - NUEVA PÓLIZA
@@ -288,7 +433,99 @@ if menu == "📝 Data Entry - Nueva Póliza":
 
                 if agregar_poliza(datos_poliza):
                     st.rerun()
-                
+
+# ============================================================
+# CONSULTAR PÓLIZAS POR CLIENTE
+# ============================================================
+elif menu == "🔍 Consultar Pólizas por Cliente":
+    st.header("🔍 Consultar Pólizas por Cliente")
+    
+    clientes = obtener_clientes_unicos()
+    
+    if not clientes:
+        st.info("ℹ️ No hay clientes registrados en el sistema")
+    else:
+        cliente_seleccionado = st.selectbox("Selecciona un cliente:", options=clientes, key="select_cliente")
+        
+        buscar_btn = st.button("🔍 Buscar Pólizas", key="buscar_polizas_btn", use_container_width=True)
+        
+        if buscar_btn and cliente_seleccionado:
+            resultados = buscar_por_nombre_cliente(cliente_seleccionado)
+            
+            if resultados:
+                df_resultados = pd.DataFrame(resultados)
+                columnas_importantes = ["No. Cliente", "No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
+                columnas_disponibles = [col for col in columnas_importantes if col in df_resultados.columns]
+                st.dataframe(df_resultados[columnas_disponibles], use_container_width=True)
+
+# ============================================================
+# PÓLIZAS PRÓXIMAS A VENCER
+# ============================================================
+elif menu == "⏳ Pólizas Próximas a Vencer":
+    st.header("⏳ Pólizas Próximas a Vencer (Próximos 30 días)")
+    
+    polizas_proximas = obtener_polizas_proximas_vencer(30)
+    
+    if polizas_proximas:
+        df_proximas = pd.DataFrame(polizas_proximas)
+        columnas_vencimiento = ["No. Cliente", "CONTRATANTE", "No. POLIZA", "PRODUCTO", "FIN DE VIGENCIA", "PRIMA ANUAL", "TELEFONO", "EMAIL"]
+        columnas_disponibles = [col for col in columnas_vencimiento if col in df_proximas.columns]
+        st.dataframe(df_proximas[columnas_disponibles], use_container_width=True)
+    else:
+        st.info("ℹ️ No hay pólizas que venzan en los próximos 30 días")
+
+# ============================================================
+# VER TODAS LAS PÓLIZAS
+# ============================================================
+elif menu == "📊 Ver Todas las Pólizas":
+    st.header("📊 Todas las Pólizas Registradas")
+    
+    todas_polizas = obtener_polizas()
+    
+    if todas_polizas:
+        df_todas = pd.DataFrame(todas_polizas)
+        st.dataframe(df_todas, use_container_width=True)
+    else:
+        st.info("ℹ️ No hay pólizas registradas en el sistema")
+
+# ============================================================
+# CUMPLEAÑOS DEL MES
+# ============================================================
+elif menu == "🎂 Cumpleaños del Mes":
+    st.header("🎂 Cumpleaños del Mes")
+    
+    mes_actual = datetime.now().strftime("%B")
+    st.subheader(f"Cumpleaños en {mes_actual}")
+    
+    cumpleaños = obtener_cumpleaños_mes_actual()
+    
+    if cumpleaños:
+        df_cumpleaños = pd.DataFrame(cumpleaños)
+        st.dataframe(df_cumpleaños[["CONTRATANTE", "FECHA DE NACIMIENTO", "DÍA"]], 
+                    use_container_width=True,
+                    column_config={
+                        "CONTRATANTE": "Contratante",
+                        "FECHA DE NACIMIENTO": "Fecha de Nacimiento",
+                        "DÍA": "Día del Mes"
+                    })
+    else:
+        st.info("ℹ️ No hay contratantes que cumplan años este mes")
+
+# ============================================================
+# VER CANCELACIONES
+# ============================================================
+elif menu == "🗑️ Ver Cancelaciones":
+    st.header("🗑️ Pólizas Canceladas")
+    
+    cancelaciones = obtener_cancelaciones()
+    
+    if cancelaciones:
+        df_cancelaciones = pd.DataFrame(cancelaciones)
+        columnas_importantes = ["No. Cliente", "CONTRATANTE", "No. POLIZA", "PRODUCTO", "INICIO DE VIGENCIA", "FIN DE VIGENCIA", "PRIMA ANUAL", "ASEGURADORA"]
+        columnas_disponibles = [col for col in columnas_importantes if col in df_cancelaciones.columns]
+        st.dataframe(df_cancelaciones[columnas_disponibles], use_container_width=True)
+    else:
+        st.info("ℹ️ No hay pólizas canceladas en el historial")
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -947,6 +1184,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
