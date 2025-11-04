@@ -599,25 +599,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
 # POST-GUARDADO: BOTÓN PARA NUEVA PÓLIZA
 # ============================================================
 if st.session_state.guardado_exitoso:
+    st.markdown('<a name="top"></a>', unsafe_allow_html=True)
     st.info("Póliza guardada correctamente.")
-    
-    # Botón para registrar otra póliza
-    if st.button("🆕 Registrar otra póliza", use_container_width=True):
-        # 1️⃣ Limpiar campos
-        limpiar_formulario()
 
-        # 2️⃣ Resetear bandera
+    # Botón para volver arriba y reiniciar formulario
+    if st.button("🆕 Registrar otra póliza", use_container_width=True):
+        limpiar_formulario()
         st.session_state.guardado_exitoso = False
 
-        # 3️⃣ Script para subir al inicio de la página
-        st.markdown("""
+        # Este truco coloca el foco arriba del todo sin usar JS
+        st.markdown(
+            """
+            <style>
+                html, body {scroll-behavior: smooth !important;}
+            </style>
             <script>
-                window.scrollTo({top: 0, behavior: 'smooth'});
+                window.scrollTo(0, 0);
             </script>
-        """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
 
-        # 4️⃣ Recargar interfaz limpia
-        st.rerun()
+        st.experimental_rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1276,6 +1279,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
