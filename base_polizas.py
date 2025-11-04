@@ -595,10 +595,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     # ✅ Marcar como guardado para evitar duplicación
                     st.session_state.guardado_exitoso = True
 
-# Mostrar mensaje post-guardado
+# ============================================================
+# POST-GUARDADO: BOTÓN PARA NUEVA PÓLIZA
+# ============================================================
 if st.session_state.guardado_exitoso:
+    st.info("Póliza guardada correctamente.")
+    
+    # Botón para registrar otra póliza
     if st.button("🆕 Registrar otra póliza", use_container_width=True):
+        # 1️⃣ Limpiar campos
+        limpiar_formulario()
+
+        # 2️⃣ Resetear bandera
         st.session_state.guardado_exitoso = False
+
+        # 3️⃣ Script para subir al inicio de la página
+        st.markdown("""
+            <script>
+                window.scrollTo({top: 0, behavior: 'smooth'});
+            </script>
+        """, unsafe_allow_html=True)
+
+        # 4️⃣ Recargar interfaz limpia
         st.rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
@@ -1258,6 +1276,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
