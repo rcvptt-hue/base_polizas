@@ -620,7 +620,7 @@ if st.session_state.guardado_exitoso:
             unsafe_allow_html=True
         )
 
-        st.experimental_rerun()
+        st.rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1279,6 +1279,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
