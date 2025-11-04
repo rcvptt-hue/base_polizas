@@ -573,16 +573,22 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 st.balloons()
                 
                 # Limpiar el formulario usando session state
-                for key in st.session_state.keys():
+                # <-- CORRECCIÓN: iterar sobre una lista copia de las keys para evitar modificar el dict mientras se itera
+                for key in list(st.session_state.keys()):
                     if key.endswith('_input') or key.endswith('_select'):
                         if key not in ['no_cliente_auto']:  # No limpiar el ID
-                            st.session_state[key] = ""
+                            try:
+                                st.session_state[key] = ""
+                            except KeyError:
+                                # Si la clave desapareció entre tiempo, la ignoramos
+                                pass
                 
                 # Limpiar campos específicos
                 st.session_state.prima_anual_input = 0.0
                 st.session_state.estado_civil_select = ""
-                st.session_state.forma_pago_select = ""
-                st.session_state.frecuencia_pago_select = ""
+                # CORRECCIÓN: estos campos eran text_input, así que usamos *_input
+                st.session_state.forma_pago_input = ""
+                st.session_state.frecuencia_pago_input = ""
                 
                 # Forzar rerun para actualizar la interfaz
                 st.rerun()
@@ -1040,6 +1046,7 @@ elif menu == "📊 Ver Todas las Pólizas":
                 opciones_producto = [""] + sorted(productos_unicos)
             else:
                 opciones_producto = [""]
+
             filtro_producto = st.selectbox("Filtrar por Producto", opciones_producto)
             
         with col2:
@@ -1050,6 +1057,7 @@ elif menu == "📊 Ver Todas las Pólizas":
                 opciones_aseguradora = [""] + sorted(aseguradoras_unicas)
             else:
                 opciones_aseguradora = [""]
+
             filtro_aseguradora = st.selectbox("Filtrar por Aseguradora", opciones_aseguradora)
         
         # Aplicar filtros
