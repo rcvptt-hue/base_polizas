@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import io
 import time
 from functools import lru_cache
+import re
 
 # ============================================================
 # CONFIGURACIÓN INICIAL
@@ -18,6 +19,43 @@ st.set_page_config(
     page_icon="📋",
     layout="wide"
 )
+
+# ============================================================
+# FUNCIÓN DE VALIDACIÓN DE FECHAS
+# ============================================================
+def validar_fecha(fecha_str):
+    """Valida que la fecha tenga formato dd/mm/yyyy y sea una fecha válida"""
+    if not fecha_str or fecha_str.strip() == "":
+        return True, ""  # Fecha vacía es válida (para campos no obligatorios)
+    
+    fecha_str = str(fecha_str).strip()
+    
+    # Patrón regex para formato dd/mm/yyyy
+    patron = r'^\d{1,2}/\d{1,2}/\d{4}$'
+    if not re.match(patron, fecha_str):
+        return False, "Formato incorrecto. Use dd/mm/yyyy (ejemplo: 15/03/1990)"
+    
+    try:
+        # Extraer día, mes y año
+        dia, mes, anio = map(int, fecha_str.split('/'))
+        
+        # Validar que la fecha sea real
+        datetime(anio, mes, dia)
+        
+        # Validaciones adicionales
+        if anio < 1900 or anio > datetime.now().year:
+            return False, f"Año {anio} fuera de rango válido (1900-{datetime.now().year})"
+        
+        if mes < 1 or mes > 12:
+            return False, "Mes debe estar entre 1 y 12"
+        
+        if dia < 1 or dia > 31:
+            return False, "Día debe estar entre 1 y 31"
+            
+        return True, ""
+        
+    except ValueError as e:
+        return False, "La fecha no es válida (ejemplo: 15/03/1990)"
 
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS
@@ -338,7 +376,7 @@ if st.sidebar.button("🔄 Limpiar Cache"):
     st.rerun()
 
 # ============================================================
-# DATA ENTRY - NUEVA PÓLIZA
+# DATA ENTRY - NUEVA PÓLIZA (CON VALIDACIÓN)
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
@@ -383,6 +421,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
         submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
 
         if submit_button:
+            # Validar campos obligatorios
             campos_faltantes = []
             if not contratante:
                 campos_faltantes.append("CONTRATANTE")
@@ -395,9 +434,39 @@ if menu == "📝 Data Entry - Nueva Póliza":
             if not fin_vigencia:
                 campos_faltantes.append("FIN DE VIGENCIA")
 
+            # Validar formatos de fecha
+            errores_fecha = []
+            
+            if fecha_nac_contratante:
+                valido, error = validar_fecha(fecha_nac_contratante)
+                if not valido:
+                    errores_fecha.append(f"Fecha Nacimiento Contratante: {error}")
+            
+            if fecha_nac_asegurado:
+                valido, error = validar_fecha(fecha_nac_asegurado)
+                if not valido:
+                    errores_fecha.append(f"Fecha Nacimiento Asegurado: {error}")
+            
+            if inicio_vigencia:
+                valido, error = validar_fecha(inicio_vigencia)
+                if not valido:
+                    errores_fecha.append(f"Inicio Vigencia: {error}")
+            
+            if fin_vigencia:
+                valido, error = validar_fecha(fin_vigencia)
+                if not valido:
+                    errores_fecha.append(f"Fin Vigencia: {error}")
+
+            # Mostrar errores
             if campos_faltantes:
                 st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
-            else:
+            
+            if errores_fecha:
+                for error in errores_fecha:
+                    st.error(error)
+
+            # Solo guardar si no hay errores
+            if not campos_faltantes and not errores_fecha:
                 def obtener_id_cliente_o_nuevo(nombre_contratante):
                     polizas = obtener_polizas()
                     for p in polizas:
@@ -1184,6 +1253,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
