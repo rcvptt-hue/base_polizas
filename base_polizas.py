@@ -457,6 +457,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
         # ============================================================
         # ENCABEZADO: Información básica + botón de limpieza
         # ============================================================
+        # ============================================================
+        # FUNCIÓN: Limpieza segura de formulario
+        # ============================================================
+        def limpiar_formulario_safe(preserve_no_cliente=True):
+            """
+            Borra del session_state las claves creadas por los inputs del formulario.
+            preserve_no_cliente: si True no borra la clave 'no_cliente_auto' (ID generado).
+            """
+            for k in list(st.session_state.keys()):
+                if (
+                    k.endswith("_input")
+                    or k.endswith("_select")
+                    or k.endswith("_form")
+                    or k in ["contratante", "asegurado", "beneficiario", "telefono", "email"]
+                ):
+                    if preserve_no_cliente and k == "no_cliente_auto":
+                        continue
+                    try:
+                        del st.session_state[k]
+                    except Exception:
+                        pass
+ 
         col_titulo, col_boton = st.columns([4, 1])
         with col_titulo:
             st.subheader("🧾 Información básica")
@@ -1334,6 +1356,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
