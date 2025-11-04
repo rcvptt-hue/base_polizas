@@ -637,46 +637,41 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     st.session_state.guardado_exitoso = True
 
 # ============================================================
-# POST-GUARDADO: Mensaje y botones
+# POST-GUARDADO: BOTONES
 # ============================================================
 if st.session_state.get("guardado_exitoso", False):
-    # Ancla para lugar superior (opcional, pero inofensivo)
-    st.markdown('<a name="top"></a>', unsafe_allow_html=True)
     st.info("Póliza guardada correctamente.")
 
-    # Mostrar botón para limpiar y volver al formulario
     col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
+
+    # 🧹 BOTÓN LIMPIAR FORMULARIO
     with col_clear_left:
         if st.button("🧹 Limpiar formulario", key="limpiar_form_btn"):
-            # 1) borrar los campos del formulario (no borrar el ID por defecto)
             limpiar_formulario_safe(preserve_no_cliente=True)
+            st.session_state.guardado_exitoso = False  # vuelve al estado normal
 
-            # 2) resetear la bandera para que la UI vuelva al estado inicial
-            st.session_state.guardado_exitoso = False
-
-            # 3) opcional: forzar que en la siguiente carga haga scroll top usando query param
-            try:
-                st.set_query_params(scroll="top")
-            except Exception:
-                pass
-
-            # 4) recargar la app para reconstruir los widgets vacíos
-            st.rerun()
-
-    # También mostramos un botón central para "Registrar otra póliza" que hace lo mismo
-    with col_clear_center:
-        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
-            limpiar_formulario_safe(preserve_no_cliente=True)
-            st.session_state.guardado_exitoso = False
             try:
                 st.experimental_set_query_params(scroll="top")
             except Exception:
                 pass
+
+            st.rerun()  # 👈 ahora con la función estable de Streamlit
+
+    # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
+    with col_clear_center:
+        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
+            limpiar_formulario_safe(preserve_no_cliente=True)
+            st.session_state.guardado_exitoso = False
+
+            try:
+                st.experimental_set_query_params(scroll="top")
+            except Exception:
+                pass
+
             st.rerun()
 
-    # (opcional) columna derecha para alguna otra acción
     with col_clear_right:
-        st.write("")  # reserva espacio o agrega otro control si quieres
+        st.empty()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1335,6 +1330,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
