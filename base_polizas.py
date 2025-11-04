@@ -534,50 +534,50 @@ if menu == "📝 Data Entry - Nueva Póliza":
     if "guardado_exitoso" not in st.session_state:
     st.session_state.guardado_exitoso = False
 
-if guardar_button and not st.session_state.guardado_exitoso:
-    # Validar campos obligatorios
-    campos_faltantes = []
-    if not contratante: campos_faltantes.append("CONTRATANTE")
-    if not asegurado: campos_faltantes.append("ASEGURADO")
-    if not no_poliza: campos_faltantes.append("No. POLIZA")
-    if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
-    if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
-
-    if campos_faltantes:
-        st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
-    else:
-        # Preparar datos para guardar
-        datos_poliza = [
-            str(nuevo_id),
-            contratante,
-            asegurado,
-            beneficiario,
-            fecha_nac_contratante,
-            fecha_nac_asegurado,
-            estado_civil,
-            no_poliza,
-            inicio_vigencia,
-            fin_vigencia,
-            forma_pago,
-            frecuencia_pago,
-            str(prima_anual),
-            producto,
-            no_serie_auto,
-            aseguradora,
-            direccion,
-            telefono,
-            email,
-            notas,
-            descripcion_auto
-        ]
-
-        if agregar_poliza(datos_poliza):
-            st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
-            st.balloons()
-            limpiar_formulario()
-
-            # ✅ Marcar como guardado para evitar duplicación
-            st.session_state.guardado_exitoso = True
+    if guardar_button and not st.session_state.guardado_exitoso:
+        # Validar campos obligatorios
+        campos_faltantes = []
+        if not contratante: campos_faltantes.append("CONTRATANTE")
+        if not asegurado: campos_faltantes.append("ASEGURADO")
+        if not no_poliza: campos_faltantes.append("No. POLIZA")
+        if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
+        if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
+    
+        if campos_faltantes:
+            st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
+        else:
+            # Preparar datos para guardar
+            datos_poliza = [
+                str(nuevo_id),
+                contratante,
+                asegurado,
+                beneficiario,
+                fecha_nac_contratante,
+                fecha_nac_asegurado,
+                estado_civil,
+                no_poliza,
+                inicio_vigencia,
+                fin_vigencia,
+                forma_pago,
+                frecuencia_pago,
+                str(prima_anual),
+                producto,
+                no_serie_auto,
+                aseguradora,
+                direccion,
+                telefono,
+                email,
+                notas,
+                descripcion_auto
+            ]
+    
+            if agregar_poliza(datos_poliza):
+                st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
+                st.balloons()
+                limpiar_formulario()
+    
+                # ✅ Marcar como guardado para evitar duplicación
+                st.session_state.guardado_exitoso = True
 
 # Mostrar mensaje post-guardado
 if st.session_state.guardado_exitoso:
@@ -1242,6 +1242,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
