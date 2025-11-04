@@ -532,7 +532,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
     
         if "guardado_exitoso" not in st.session_state:
-        st.session_state.guardado_exitoso = False
+            st.session_state.guardado_exitoso = False
     
         if guardar_button and not st.session_state.guardado_exitoso:
             # Validar campos obligatorios
@@ -1242,6 +1242,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
