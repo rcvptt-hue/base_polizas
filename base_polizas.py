@@ -677,12 +677,6 @@ if st.session_state.get("guardado_exitoso", False):
 
     col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
 
-    # 🧹 BOTÓN LIMPIAR FORMULARIO
-    with col_clear_left:
-        if st.button("🧹 Limpiar formulario", key="limpiar_form_btn"):
-            st.session_state.limpiar = True
-            st.rerun()
-
     # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
     with col_clear_center:
         if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
@@ -1356,6 +1350,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
