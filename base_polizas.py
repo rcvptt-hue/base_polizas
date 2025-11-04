@@ -572,33 +572,29 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
                 st.balloons()
                 
-                # Limpiar el formulario usando session state
-                # ✅ Corrección: limpiar sin modificar claves que ya no existen
-                try:
-                    keys_para_limpiar = [
-                        key for key in list(st.session_state.keys())
-                        if (key.endswith('_input') or key.endswith('_select'))
-                        and key not in ['no_cliente_auto']
-                    ]
-                    # Solo actualizar si la clave existe todavía
-                    for key in keys_para_limpiar:
-                        if key in st.session_state:
-                            st.session_state.update({key: ""})
-                except Exception as e:
-                    st.warning(f"No se pudieron limpiar todos los campos: {e}")
-                
-                # Limpiar campos numéricos o específicos
-                if "prima_anual_input" in st.session_state:
-                    st.session_state.prima_anual_input = 0.0
-                if "estado_civil_select" in st.session_state:
-                    st.session_state.estado_civil_select = ""
-                if "forma_pago_input" in st.session_state:
-                    st.session_state.forma_pago_input = ""
-                if "frecuencia_pago_input" in st.session_state:
-                    st.session_state.frecuencia_pago_input = ""
-                
-                # Forzar rerun para refrescar
-                st.rerun()
+                # ✅ Limpieza segura del formulario después de guardar (versión Streamlit 1.40+)
+                    def limpiar_formulario():
+                        """Elimina las claves del formulario sin modificar widgets activos."""
+                        keys_a_borrar = [
+                            k for k in list(st.session_state.keys())
+                            if k.endswith('_input') or k.endswith('_select')
+                        ]
+                        for k in keys_a_borrar:
+                            try:
+                                del st.session_state[k]
+                            except KeyError:
+                                pass  # Si ya fue eliminado por Streamlit, ignorar
+                    
+                    # Después de guardar correctamente la póliza:
+                    if agregar_poliza(datos_poliza):
+                        st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
+                        st.balloons()
+                    
+                        # 🔄 Limpieza total del formulario
+                        limpiar_formulario()
+                    
+                        # Forzar rerun para reconstruir la UI vacía
+                        st.rerun()
 
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
@@ -1258,4 +1254,5 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
