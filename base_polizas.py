@@ -13,45 +13,16 @@ from functools import lru_cache
 # ============================================================
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Configuración de la página
 st.set_page_config(
     page_title="Sistema de Gestión de Pólizas",
     page_icon="📋",
     layout="wide"
 )
 
-# ------------------------------------------------------------
-# Manejo de scroll tras recarga
-# ------------------------------------------------------------
-try:
-    params = st.experimental_get_query_params()
-    if params.get("scroll", [""])[0] == "top":
-        st.experimental_set_query_params()
-        st.markdown(
-            "<script>window.scrollTo({top: 0, behavior: 'smooth'});</script>",
-            unsafe_allow_html=True
-        )
-except Exception:
-    pass
-
 # ============================================================
-# INICIALIZACIÓN DEL ESTADO DE SESIÓN PARA FORMULARIOS
-# ============================================================
-def inicializar_estado_formulario():
-    """Inicializa el estado para el manejo de formularios sin recargas constantes"""
-    if 'guardado_exitoso' not in st.session_state:
-        st.session_state.guardado_exitoso = False
-    if 'datos_formulario' not in st.session_state:
-        st.session_state.datos_formulario = {}
-
-# Llamar a la inicialización al inicio
-inicializar_estado_formulario()
-
-# ============================================================
-# CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
+# CONFIGURACIÓN DE GOOGLE SHEETS
 # ============================================================
 def init_google_sheets():
-    """Inicializa la conexión con Google Sheets con manejo de errores"""
     try:
         if 'google_service_account' not in st.secrets:
             st.error("❌ No se encontró 'google_service_account' en los secrets de Streamlit")
@@ -70,29 +41,25 @@ def init_google_sheets():
         st.error(f"❌ Error al autenticar con Google Sheets: {str(e)}")
         return None
 
-# Inicializar cliente
 client = init_google_sheets()
 if client is None:
     st.stop()
 
 # ============================================================
-# CONFIGURACIÓN DE LA HOJA DE CÁLCULO CON REINTENTOS
+# CONFIGURACIÓN DE LA HOJA DE CÁLCULO
 # ============================================================
 SPREADSHEET_NAME = "base_poliza"
 
 @st.cache_resource(show_spinner=False)
 def get_sheet_with_retry():
-    """Obtiene la hoja de cálculo con reintentos en caso de error de cuota"""
     max_retries = 3
     for attempt in range(max_retries):
         try:
             sheet = client.open(SPREADSHEET_NAME)
-            st.sidebar.success("✅ Conectado a Google Sheets")
             return sheet
         except gspread.exceptions.APIError as e:
             if "429" in str(e) and attempt < max_retries - 1:
-                wait_time = (2 ** attempt) + 2  # Exponential backoff
-                st.warning(f"⏳ Límite de API excedido. Reintentando en {wait_time} segundos...")
+                wait_time = (2 ** attempt) + 2
                 time.sleep(wait_time)
                 continue
             else:
@@ -105,11 +72,10 @@ def get_sheet_with_retry():
             st.error(f"❌ Error inesperado al abrir la hoja de cálculo: {str(e)}")
             st.stop()
 
-# Obtener la hoja con manejo de reintentos
 sheet = get_sheet_with_retry()
 
 # ============================================================
-# DEFINICIÓN DE CAMPOS
+# DEFINICIÓN DE CAMPOS Y CONFIGURACIONES
 # ============================================================
 CAMPOS_POLIZA = [
     "No. Cliente", "CONTRATANTE", "ASEGURADO", "BENEFICIARIO",
@@ -119,18 +85,24 @@ CAMPOS_POLIZA = [
     "ASEGURADORA", "DIRECCIÓN", "TELEFONO", "EMAIL", "NOTAS", "DESCRIPCION AUTO"
 ]
 
+ASEGURADORAS = [
+    "ALLIANZ", "ANA SEGUROS", "BX+", "EL AGUILA", 
+    "INSIGNIA LIFE", "MAPFRE", "QUALITAS"
+]
+
+OPCIONES_ESTADO_CIVIL = [
+    "", "SOLTERO/A", "CASADO/A", "DIVORCIADO/A",
+    "SEPARADO/A", "UNIÓN LIBRE", "VIUDO/A"
+]
+
 # ============================================================
-# FUNCIONES PRINCIPALES CON CACHE Y REINTENTOS
+# FUNCIONES PRINCIPALES
 # ============================================================
 def ensure_sheet_exists(sheet, title, headers):
-    """Crea la hoja si no existe, con los encabezados dados."""
     max_retries = 2
     for attempt in range(max_retries):
         try:
             worksheet = sheet.worksheet(title)
-            existing_headers = worksheet.row_values(1)
-            if existing_headers != headers:
-                st.warning(f"⚠️ Los encabezados en '{title}' no coinciden. Se usarán los existentes.")
             return worksheet
         except gspread.WorksheetNotFound:
             try:
@@ -142,69 +114,30 @@ def ensure_sheet_exists(sheet, title, headers):
                     time.sleep(2)
                     continue
                 else:
-                    st.error(f"❌ Error al crear/verificar la hoja {title}: {str(e)}")
                     return None
-        except gspread.exceptions.APIError as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-            else:
-                st.error(f"❌ Error de API al crear/verificar la hoja {title}: {str(e)}")
-                return None
         except Exception as e:
-            st.error(f"❌ Error inesperado al crear/verificar la hoja {title}: {str(e)}")
             return None
 
 @st.cache_data(ttl=300)
 def obtener_polizas_cached():
-    """Obtiene todas las pólizas como lista de diccionarios (con cache)"""
     max_retries = 2
     for attempt in range(max_retries):
         try:
             return polizas_ws.get_all_records()
-        except gspread.exceptions.APIError as e:
+        except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
                 time.sleep(2)
                 continue
             else:
-                st.error(f"❌ Error al obtener pólizas: {str(e)}")
                 return []
-        except Exception as e:
-            st.error(f"❌ Error inesperado al obtener pólizas: {str(e)}")
-            return []
 
 def obtener_polizas():
-    """Wrapper para obtener pólizas que puede limpiar cache si es necesario"""
     return obtener_polizas_cached()
 
-@st.cache_data(ttl=300)
-def obtener_cancelaciones_cached():
-    """Obtiene todas las cancelaciones como lista de diccionarios (con cache)"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            return cancelaciones_ws.get_all_records()
-        except gspread.exceptions.APIError as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-            else:
-                st.error(f"❌ Error al obtener cancelaciones: {str(e)}")
-                return []
-        except Exception as e:
-            st.error(f"❌ Error inesperado al obtener cancelaciones: {str(e)}")
-            return []
-
-def obtener_cancelaciones():
-    """Wrapper para obtener cancelaciones"""
-    return obtener_cancelaciones_cached()
-
 def clear_polizas_cache():
-    """Limpia el cache de pólizas"""
     st.cache_data.clear()
 
 def obtener_ultimo_id_cliente():
-    """Obtiene el último ID de cliente utilizado"""
     try:
         polizas = obtener_polizas()
         if not polizas:
@@ -217,51 +150,14 @@ def obtener_ultimo_id_cliente():
                 ids_clientes.append(int(id_cliente))
         
         return max(ids_clientes) if ids_clientes else 0
-    except Exception as e:
-        st.error(f"❌ Error al obtener último ID: {str(e)}")
+    except Exception:
         return 0
 
 def generar_nuevo_id_cliente():
-    """Genera un nuevo ID de cliente automáticamente"""
     ultimo_id = obtener_ultimo_id_cliente()
     return ultimo_id + 1
 
-@st.cache_data(ttl=300)
-def obtener_clientes_unicos_cached():
-    """Obtiene lista de clientes únicos para el dropdown (con cache)"""
-    try:
-        polizas = obtener_polizas()
-        if not polizas:
-            return []
-        
-        clientes = {}
-        for poliza in polizas:
-            contratante = poliza.get("CONTRATANTE", "")
-            id_cliente = poliza.get("No. Cliente", "")
-            if contratante:
-                clientes[contratante] = id_cliente
-        
-        return sorted(clientes.keys())
-    except Exception as e:
-        st.error(f"❌ Error al obtener clientes: {str(e)}")
-        return []
-
-def obtener_clientes_unicos():
-    """Wrapper para obtener clientes únicos"""
-    return obtener_clientes_unicos_cached()
-
-def buscar_por_nombre_cliente(nombre_cliente):
-    """Busca pólizas por nombre del cliente"""
-    try:
-        polizas = obtener_polizas()
-        resultados = [p for p in polizas if p.get("CONTRATANTE", "") == nombre_cliente]
-        return resultados
-    except Exception as e:
-        st.error(f"❌ Error al buscar pólizas: {str(e)}")
-        return []
-
 def agregar_poliza(datos):
-    """Agrega una nueva póliza a la hoja con manejo de reintentos"""
     max_retries = 2
     for attempt in range(max_retries):
         try:
@@ -269,38 +165,12 @@ def agregar_poliza(datos):
             polizas_ws.append_row(datos_str)
             clear_polizas_cache()
             return True
-        except gspread.exceptions.APIError as e:
+        except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
                 time.sleep(2)
                 continue
             else:
-                st.error(f"❌ Error al agregar póliza: {str(e)}")
-                st.error(f"📋 Datos que se intentaron guardar: {datos_str}")
                 return False
-        except Exception as e:
-            st.error(f"❌ Error inesperado al agregar póliza: {str(e)}")
-            return False
-
-def mover_a_cancelaciones(datos):
-    """Mueve una póliza a la hoja de cancelaciones"""
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            datos_str = [str(dato) if dato is not None else "" for dato in datos]
-            cancelaciones_ws.append_row(datos_str)
-            clear_polizas_cache()
-            return True
-        except gspread.exceptions.APIError as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-            else:
-                st.error(f"❌ Error al mover a cancelaciones: {str(e)}")
-                st.error(f"📋 Datos que se intentaron guardar: {datos_str}")
-                return False
-        except Exception as e:
-            st.error(f"❌ Error inesperado al mover a cancelaciones: {str(e)}")
-            return False
 
 # ============================================================
 # INICIALIZAR HOJAS DE TRABAJO
@@ -310,220 +180,63 @@ if polizas_ws is None:
     st.error("❌ No se pudo inicializar la hoja de pólizas")
     st.stop()
 
-cancelaciones_ws = ensure_sheet_exists(sheet, "Cancelaciones", CAMPOS_POLIZA)
-if cancelaciones_ws is None:
-    st.error("❌ No se pudo inicializar la hoja de cancelaciones")
-    st.stop()
-
 # ============================================================
 # INTERFAZ PRINCIPAL
 # ============================================================
 st.title("🏢 Sistema de Gestión de Pólizas")
 st.markdown("---")
 
-# Menú principal
 menu = st.sidebar.radio("Navegación", [
     "📝 Data Entry - Nueva Póliza", 
     "🔍 Consultar Pólizas por Cliente", 
-    "⏳ Pólizas Próximas a Vencer",
-    "📊 Ver Todas las Pólizas",
-    "🎂 Cumpleaños del Mes",
-    "🗑️ Ver Cancelaciones"
+    "📊 Ver Todas las Pólizas"
 ])
 
-# Botón para limpiar cache manualmente
-if st.sidebar.button("🔄 Limpiar Cache"):
-    clear_polizas_cache()
-    st.sidebar.success("✅ Cache limpiado correctamente")
-    st.rerun()
-
 # ============================================================
-# 1. DATA ENTRY - NUEVA PÓLIZA (VERSIÓN SIMPLIFICADA)
+# DATA ENTRY - NUEVA PÓLIZA
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
     
-    # ID de cliente generado automáticamente
     nuevo_id = generar_nuevo_id_cliente()
     
-    # Lista de aseguradoras predefinidas
-    ASEGURADORAS = [
-        "ALLIANZ",
-        "ANA SEGUROS", 
-        "BX+",
-        "EL AGUILA",
-        "INSIGNIA LIFE",
-        "MAPFRE",
-        "QUALITAS"
-    ]
-    
-    # Opciones actualizadas para estado civil
-    OPCIONES_ESTADO_CIVIL = [
-        "",
-        "SOLTERO/A",
-        "CASADO/A", 
-        "DIVORCIADO/A",
-        "SEPARADO/A",
-        "UNIÓN LIBRE",
-        "VIUDO/A"
-    ]
-    
-    # --- FORMULARIO PRINCIPAL ---
     with st.form("form_nueva_poliza", clear_on_submit=True):
-        st.subheader("🧾 Información básica")
-        
         col1, col2 = st.columns(2)
         
         with col1:
-            # Usar datos del estado de sesión o valores por defecto
-            no_cliente_val = st.session_state.datos_formulario.get("no_cliente", str(nuevo_id))
-            st.text_input("No. Cliente *", value=no_cliente_val, key="no_cliente_auto", disabled=True)
-            
-            contratante = st.text_input(
-                "CONTRATANTE *", 
-                value=st.session_state.datos_formulario.get("contratante", ""),
-                key="contratante_input"
-            )
-            
-            asegurado = st.text_input(
-                "ASEGURADO *", 
-                value=st.session_state.datos_formulario.get("asegurado", ""),
-                key="asegurado_input"
-            )
-            
-            beneficiario = st.text_input(
-                "BENEFICIARIO", 
-                value=st.session_state.datos_formulario.get("beneficiario", ""),
-                key="beneficiario_input"
-            )
-            
-            fecha_nac_contratante = st.text_input(
-                "FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", 
-                placeholder="DD/MM/AAAA",
-                value=st.session_state.datos_formulario.get("fecha_nac_contratante", ""),
-                key="fecha_nac_contratante_input"
-            )
-            
-            fecha_nac_asegurado = st.text_input(
-                "FECHA DE NAC ASEGURADO (DD/MM/AAAA)", 
-                placeholder="DD/MM/AAAA", 
-                value=st.session_state.datos_formulario.get("fecha_nac_asegurado", ""),
-                key="fecha_nac_asegurado_input"
-            )
-            
-            estado_civil_val = st.session_state.datos_formulario.get("estado_civil", "")
-            estado_civil_index = OPCIONES_ESTADO_CIVIL.index(estado_civil_val) if estado_civil_val in OPCIONES_ESTADO_CIVIL else 0
-            estado_civil = st.selectbox(
-                "ESTADO CIVIL", 
-                options=OPCIONES_ESTADO_CIVIL,
-                index=estado_civil_index,
-                key="estado_civil_select"
-            )
+            st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
+            contratante = st.text_input("CONTRATANTE *", key="contratante_input")
+            asegurado = st.text_input("ASEGURADO *", key="asegurado_input")
+            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input")
+            fecha_nac_contratante = st.text_input("FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fecha_nac_contratante_input")
+            fecha_nac_asegurado = st.text_input("FECHA DE NAC ASEGURADO (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fecha_nac_asegurado_input")
+            estado_civil = st.selectbox("ESTADO CIVIL", options=OPCIONES_ESTADO_CIVIL, key="estado_civil_select")
         
         with col2:
-            no_poliza = st.text_input(
-                "No. POLIZA *", 
-                value=st.session_state.datos_formulario.get("no_poliza", ""),
-                key="no_poliza_input"
-            )
-            
-            inicio_vigencia = st.text_input(
-                "INICIO DE VIGENCIA * (DD/MM/AAAA)", 
-                placeholder="DD/MM/AAAA",
-                value=st.session_state.datos_formulario.get("inicio_vigencia", ""),
-                key="inicio_vigencia_input"
-            )
-            
-            fin_vigencia = st.text_input(
-                "FIN DE VIGENCIA * (DD/MM/AAAA)", 
-                placeholder="DD/MM/AAAA",
-                value=st.session_state.datos_formulario.get("fin_vigencia", ""),
-                key="fin_vigencia_input"
-            )
-            
-            forma_pago = st.text_input(
-                "FORMA DE PAGO", 
-                placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
-                value=st.session_state.datos_formulario.get("forma_pago", ""),
-                key="forma_pago_input"
-            )
-            
-            frecuencia_pago = st.text_input(
-                "FRECUENCIA DE PAGO", 
-                placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
-                value=st.session_state.datos_formulario.get("frecuencia_pago", ""),
-                key="frecuencia_pago_input"
-            )
-            
-            prima_anual_default = st.session_state.datos_formulario.get("prima_anual", 0.0)
-            prima_anual = st.number_input(
-                "PRIMA ANUAL", 
-                min_value=0.0, 
-                format="%.2f",
-                value=float(prima_anual_default) if prima_anual_default else 0.0,
-                key="prima_anual_input"
-            )
-            
-            producto = st.text_input(
-                "PRODUCTO", 
-                value=st.session_state.datos_formulario.get("producto", ""),
-                key="producto_input"
-            )
+            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input")
+            inicio_vigencia = st.text_input("INICIO DE VIGENCIA * (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="inicio_vigencia_input")
+            fin_vigencia = st.text_input("FIN DE VIGENCIA * (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fin_vigencia_input")
+            forma_pago = st.text_input("FORMA DE PAGO", placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático", key="forma_pago_input")
+            frecuencia_pago = st.text_input("FRECUENCIA DE PAGO", placeholder="Ej: Anual, Semestral, Trimestral, Mensual", key="frecuencia_pago_input")
+            prima_anual = st.number_input("PRIMA ANUAL", min_value=0.0, format="%.2f", value=0.0, key="prima_anual_input")
+            producto = st.text_input("PRODUCTO", key="producto_input")
         
         st.subheader("Información Adicional")
         col3, col4 = st.columns(2)
         
         with col3:
-            no_serie_auto = st.text_input(
-                "No Serie Auto", 
-                value=st.session_state.datos_formulario.get("no_serie_auto", ""),
-                key="no_serie_auto_input"
-            )
-            
-            aseguradora_val = st.session_state.datos_formulario.get("aseguradora", "")
-            aseguradora_index = ASEGURADORAS.index(aseguradora_val) if aseguradora_val in ASEGURADORAS else 0
-            aseguradora = st.selectbox(
-                "ASEGURADORA",
-                options=ASEGURADORAS,
-                index=aseguradora_index,
-                key="aseguradora_select"
-            )
-            
-            direccion = st.text_area(
-                "DIRECCIÓN", 
-                value=st.session_state.datos_formulario.get("direccion", ""),
-                key="direccion_input"
-            )
+            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input")
+            aseguradora = st.selectbox("ASEGURADORA", options=ASEGURADORAS, key="aseguradora_select")
+            direccion = st.text_area("DIRECCIÓN", key="direccion_input")
         
         with col4:
-            telefono = st.text_input(
-                "TELEFONO", 
-                value=st.session_state.datos_formulario.get("telefono", ""),
-                key="telefono_input"
-            )
-            
-            email = st.text_input(
-                "EMAIL", 
-                value=st.session_state.datos_formulario.get("email", ""),
-                key="email_input"
-            )
-            
-            notas = st.text_area(
-                "NOTAS", 
-                value=st.session_state.datos_formulario.get("notas", ""),
-                key="notas_input"
-            )
-            
-            descripcion_auto = st.text_area(
-                "DESCRIPCION AUTO", 
-                value=st.session_state.datos_formulario.get("descripcion_auto", ""),
-                key="descripcion_auto_input"
-            )
+            telefono = st.text_input("TELEFONO", key="telefono_input")
+            email = st.text_input("EMAIL", key="email_input")
+            notas = st.text_area("NOTAS", key="notas_input")
+            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input")
         
-        # --- BOTÓN DE ENVÍO ÚNICO ---
         submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
 
-        # --- PROCESAR BOTÓN DE ENVÍO ---
         if submit_button:
             campos_faltantes = []
             if not contratante:
@@ -540,32 +253,6 @@ if menu == "📝 Data Entry - Nueva Póliza":
             if campos_faltantes:
                 st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
             else:
-                # Guardar datos actuales en el estado de sesión
-                st.session_state.datos_formulario = {
-                    "no_cliente": str(nuevo_id),
-                    "contratante": contratante,
-                    "asegurado": asegurado,
-                    "beneficiario": beneficiario,
-                    "fecha_nac_contratante": fecha_nac_contratante,
-                    "fecha_nac_asegurado": fecha_nac_asegurado,
-                    "estado_civil": estado_civil,
-                    "no_poliza": no_poliza,
-                    "inicio_vigencia": inicio_vigencia,
-                    "fin_vigencia": fin_vigencia,
-                    "forma_pago": forma_pago,
-                    "frecuencia_pago": frecuencia_pago,
-                    "prima_anual": prima_anual,
-                    "producto": producto,
-                    "no_serie_auto": no_serie_auto,
-                    "aseguradora": aseguradora,
-                    "direccion": direccion,
-                    "telefono": telefono,
-                    "email": email,
-                    "notas": notas,
-                    "descripcion_auto": descripcion_auto
-                }
-
-                # Función para obtener ID existente o nuevo
                 def obtener_id_cliente_o_nuevo(nombre_contratante):
                     polizas = obtener_polizas()
                     for p in polizas:
@@ -600,29 +287,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
 
                 if agregar_poliza(datos_poliza):
-                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
-                    st.balloons()
-                    st.session_state.guardado_exitoso = True
-                    st.session_state.datos_formulario = {}
                     st.rerun()
-                else:
-                    st.error("❌ Error al guardar la póliza")
-
-# ============================================================
-# POST-GUARDADO: BOTÓN PARA REGISTRAR OTRA PÓLIZA
-# ============================================================
-if menu == "📝 Data Entry - Nueva Póliza":
-    if st.session_state.get("guardado_exitoso", False):
-        st.info("Póliza guardada correctamente.")
-
-        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
-            st.session_state.guardado_exitoso = False
-            st.session_state.datos_formulario = {}
-            try:
-                st.experimental_set_query_params(scroll="top")
-            except Exception:
-                pass
-            st.rerun()
                 
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
@@ -1282,6 +947,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
