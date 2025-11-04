@@ -433,7 +433,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
         if st.button("🧹 Limpiar Formulario", use_container_width=True, type="secondary"):
             limpiar_campos_session_state()
             st.session_state.limpiar_formulario = True
-            st.experimental_rerun()
+            st.rerun()
 
     # Formulario principal
     with st.form("form_nueva_poliza", clear_on_submit=False):
@@ -486,7 +486,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
         if clear_in_form:
             limpiar_campos_session_state()
             st.session_state.limpiar_formulario = True
-            st.experimental_rerun()
+            st.rerun()
 
         # Procesar envío del formulario
         if submit_button:
@@ -592,7 +592,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     st.success("✅ ¡Póliza guardada exitosamente!")
                     st.balloons()
                     limpiar_campos_session_state()
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("❌ Error al guardar la póliza. Por favor intenta nuevamente.")
 
@@ -1346,5 +1346,6 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
