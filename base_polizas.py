@@ -21,15 +21,12 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------
-# Manejo de scroll tras recarga: si existe ?scroll=top -> hacer scroll to top
-# Debe ir al inicio del archivo, inmediatamente después de st.set_page_config(...)
+# Manejo de scroll tras recarga
 # ------------------------------------------------------------
 try:
     params = st.experimental_get_query_params()
     if params.get("scroll", [""])[0] == "top":
-        # Borrar el param para que el efecto no se repita
         st.experimental_set_query_params()
-        # Ejecutar JS para subir al inicio (se ejecuta al renderizar la página)
         st.markdown(
             "<script>window.scrollTo({top: 0, behavior: 'smooth'});</script>",
             unsafe_allow_html=True
@@ -38,19 +35,32 @@ except Exception:
     pass
 
 # ============================================================
-# SOLUCIÓN DEFINITIVA PARA LIMPIAR FORMULARIOS
+# INICIALIZACIÓN DEL ESTADO DE SESIÓN PARA FORMULARIOS
 # ============================================================
-def limpiar_formulario_nueva_poliza():
-    """Limpia todos los campos del formulario usando una aproximación diferente"""
-    # En lugar de borrar session_state, usamos un flag y rerun
-    st.session_state.formulario_limpiado = True
-    st.rerun()
-def inicializar_formulario():
-    """Inicializa el estado del formulario si es necesario"""
+def inicializar_estado_formulario():
+    """Inicializa el estado para el manejo de formularios sin recargas constantes"""
     if 'formulario_limpiado' not in st.session_state:
         st.session_state.formulario_limpiado = False
     if 'formulario_inicializado' not in st.session_state:
         st.session_state.formulario_inicializado = True
+    if 'guardado_exitoso' not in st.session_state:
+        st.session_state.guardado_exitoso = False
+    if 'datos_formulario' not in st.session_state:
+        st.session_state.datos_formulario = {}
+
+# Llamar a la inicialización al inicio
+inicializar_estado_formulario()
+
+# ============================================================
+# FUNCIÓN MEJORADA PARA LIMPIAR FORMULARIOS
+# ============================================================
+def limpiar_formulario_nueva_poliza():
+    """Limpia todos los campos del formulario usando el patrón del primer código"""
+    st.session_state.formulario_limpiado = True
+    st.session_state.guardado_exitoso = False
+    st.session_state.datos_formulario = {}
+    st.rerun()
+
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
 # ============================================================
@@ -132,7 +142,6 @@ def ensure_sheet_exists(sheet, title, headers):
     for attempt in range(max_retries):
         try:
             worksheet = sheet.worksheet(title)
-            # Verificar encabezados existentes
             existing_headers = worksheet.row_values(1)
             if existing_headers != headers:
                 st.warning(f"⚠️ Los encabezados en '{title}' no coinciden. Se usarán los existentes.")
@@ -160,7 +169,7 @@ def ensure_sheet_exists(sheet, title, headers):
             st.error(f"❌ Error inesperado al crear/verificar la hoja {title}: {str(e)}")
             return None
 
-@st.cache_data(ttl=300)  # Cache por 5 minutos
+@st.cache_data(ttl=300)
 def obtener_polizas_cached():
     """Obtiene todas las pólizas como lista de diccionarios (con cache)"""
     max_retries = 2
@@ -182,7 +191,7 @@ def obtener_polizas():
     """Wrapper para obtener pólizas que puede limpiar cache si es necesario"""
     return obtener_polizas_cached()
 
-@st.cache_data(ttl=300)  # Cache por 5 minutos
+@st.cache_data(ttl=300)
 def obtener_cancelaciones_cached():
     """Obtiene todas las cancelaciones como lista de diccionarios (con cache)"""
     max_retries = 2
@@ -231,7 +240,7 @@ def generar_nuevo_id_cliente():
     ultimo_id = obtener_ultimo_id_cliente()
     return ultimo_id + 1
 
-@st.cache_data(ttl=300)  # Cache por 5 minutos
+@st.cache_data(ttl=300)
 def obtener_clientes_unicos_cached():
     """Obtiene lista de clientes únicos para el dropdown (con cache)"""
     try:
@@ -246,7 +255,6 @@ def obtener_clientes_unicos_cached():
             if contratante:
                 clientes[contratante] = id_cliente
         
-        # Ordenar alfabéticamente por nombre
         return sorted(clientes.keys())
     except Exception as e:
         st.error(f"❌ Error al obtener clientes: {str(e)}")
@@ -271,13 +279,9 @@ def agregar_poliza(datos):
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            # Convertir todos los valores a string para evitar problemas
             datos_str = [str(dato) if dato is not None else "" for dato in datos]
             polizas_ws.append_row(datos_str)
-            
-            # Limpiar cache después de agregar nueva póliza
             clear_polizas_cache()
-            
             return True
         except gspread.exceptions.APIError as e:
             if "429" in str(e) and attempt < max_retries - 1:
@@ -296,13 +300,9 @@ def mover_a_cancelaciones(datos):
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            # Convertir todos los valores a string para evitar problemas
             datos_str = [str(dato) if dato is not None else "" for dato in datos]
             cancelaciones_ws.append_row(datos_str)
-            
-            # Limpiar cache después de agregar cancelación
             clear_polizas_cache()
-            
             return True
         except gspread.exceptions.APIError as e:
             if "429" in str(e) and attempt < max_retries - 1:
@@ -316,87 +316,6 @@ def mover_a_cancelaciones(datos):
             st.error(f"❌ Error inesperado al mover a cancelaciones: {str(e)}")
             return False
 
-@st.cache_data(ttl=600)  # Cache por 10 minutos para vencimientos
-def obtener_polizas_proximas_vencer(dias=30):
-    """Obtiene pólizas que vencen en los próximos N días (con cache)"""
-    try:
-        polizas = obtener_polizas()
-        hoy = datetime.now().date()
-        fecha_limite = hoy + timedelta(days=dias)
-        
-        polizas_proximas = []
-        
-        for poliza in polizas:
-            fecha_fin = poliza.get("FIN DE VIGENCIA", "")
-            if fecha_fin:
-                try:
-                    # Intentar diferentes formatos de fecha
-                    if isinstance(fecha_fin, str):
-                        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-                            try:
-                                fecha_fin_dt = datetime.strptime(fecha_fin, fmt).date()
-                                break
-                            except ValueError:
-                                continue
-                        else:
-                            continue
-                    else:
-                        continue
-                    
-                    if hoy <= fecha_fin_dt <= fecha_limite:
-                        polizas_proximas.append(poliza)
-                        
-                except Exception:
-                    continue
-        
-        return polizas_proximas
-    except Exception as e:
-        st.error(f"❌ Error al obtener pólizas próximas a vencer: {str(e)}")
-        return []
-
-def obtener_cumpleaños_mes_actual():
-    """Obtiene los contratantes que cumplen años en el mes actual"""
-    try:
-        polizas = obtener_polizas()
-        mes_actual = datetime.now().month
-        
-        cumpleaños_mes = []
-        
-        for poliza in polizas:
-            fecha_nac = poliza.get("FECHA DE NAC CONTRATANTE", "")
-            contratante = poliza.get("CONTRATANTE", "")
-            
-            if fecha_nac and contratante:
-                try:
-                    # Intentar diferentes formatos de fecha
-                    for fmt in ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y']:
-                        try:
-                            fecha_nac_dt = datetime.strptime(fecha_nac, fmt)
-                            break
-                        except ValueError:
-                            continue
-                    else:
-                        continue
-                    
-                    # Verificar si es el mes actual
-                    if fecha_nac_dt.month == mes_actual:
-                        cumpleaños_mes.append({
-                            "CONTRATANTE": contratante,
-                            "FECHA DE NACIMIENTO": fecha_nac_dt.strftime('%d/%m/%Y'),
-                            "DÍA": fecha_nac_dt.day
-                        })
-                        
-                except Exception:
-                    continue
-        
-        # Ordenar por día del mes
-        cumpleaños_mes.sort(key=lambda x: x["DÍA"])
-        return cumpleaños_mes
-        
-    except Exception as e:
-        st.error(f"❌ Error al obtener cumpleaños: {str(e)}")
-        return []
-
 # ============================================================
 # INICIALIZAR HOJAS DE TRABAJO
 # ============================================================
@@ -405,7 +324,6 @@ if polizas_ws is None:
     st.error("❌ No se pudo inicializar la hoja de pólizas")
     st.stop()
 
-# NUEVA HOJA: Cancelaciones
 cancelaciones_ws = ensure_sheet_exists(sheet, "Cancelaciones", CAMPOS_POLIZA)
 if cancelaciones_ws is None:
     st.error("❌ No se pudo inicializar la hoja de cancelaciones")
@@ -423,8 +341,8 @@ menu = st.sidebar.radio("Navegación", [
     "🔍 Consultar Pólizas por Cliente", 
     "⏳ Pólizas Próximas a Vencer",
     "📊 Ver Todas las Pólizas",
-    "🎂 Cumpleaños del Mes",  # NUEVA OPCIÓN
-    "🗑️ Ver Cancelaciones"   # NUEVA OPCIÓN
+    "🎂 Cumpleaños del Mes",
+    "🗑️ Ver Cancelaciones"
 ])
 
 # Botón para limpiar cache manualmente
@@ -434,7 +352,7 @@ if st.sidebar.button("🔄 Limpiar Cache"):
     st.rerun()
 
 # ============================================================
-# 1. DATA ENTRY - NUEVA PÓLIZA
+# 1. DATA ENTRY - NUEVA PÓLIZA (VERSIÓN MEJORADA)
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
@@ -464,140 +382,193 @@ if menu == "📝 Data Entry - Nueva Póliza":
         "VIUDO/A"
     ]
     
-    # Crear contenedor para el formulario
-    form_container = st.container()
-    
-    with form_container:
-        # ============================================================
-        # ENCABEZADO: Información básica + botón de limpieza
-        # ============================================================
+    # --- Botón para cancelar edición ---
+    if st.session_state.formulario_limpiado:
+        if st.button("❌ Cancelar Limpieza", key="btn_cancelar_limpieza"):
+            st.session_state.formulario_limpiado = False
+            st.session_state.datos_formulario = {}
+            st.rerun()
+
+    # --- FORMULARIO PRINCIPAL ---
+    with st.form("form_nueva_poliza", clear_on_submit=True):
+        st.subheader("🧾 Información básica")
+        
+        # Mostrar información de estado
+        if st.session_state.formulario_limpiado:
+            st.info("Formulario listo para nuevos datos")
+        
         col_titulo, col_boton = st.columns([4, 1])
         with col_titulo:
-            st.subheader("🧾 Información básica")
+            st.write("Complete los datos de la nueva póliza:")
         with col_boton:
-            if st.button("🧹 Limpiar campos", key="btn_limpiar_form"):
+            if st.form_submit_button("🧹 Limpiar campos", type="secondary", use_container_width=True):
                 limpiar_formulario_nueva_poliza()
+
         col1, col2 = st.columns(2)
         
         with col1:
-            st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
-            contratante = st.text_input("CONTRATANTE *", key="contratante_input", value="")
-            asegurado = st.text_input("ASEGURADO *", key="asegurado_input", value="")
-            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input", value="")
+            # Usar datos del estado de sesión o valores por defecto
+            no_cliente_val = st.session_state.datos_formulario.get("no_cliente", str(nuevo_id))
+            st.text_input("No. Cliente *", value=no_cliente_val, key="no_cliente_auto", disabled=True)
             
-            # Campos de fecha usando texto (más flexible para años anteriores)
+            contratante = st.text_input(
+                "CONTRATANTE *", 
+                value=st.session_state.datos_formulario.get("contratante", ""),
+                key="contratante_input"
+            )
+            
+            asegurado = st.text_input(
+                "ASEGURADO *", 
+                value=st.session_state.datos_formulario.get("asegurado", ""),
+                key="asegurado_input"
+            )
+            
+            beneficiario = st.text_input(
+                "BENEFICIARIO", 
+                value=st.session_state.datos_formulario.get("beneficiario", ""),
+                key="beneficiario_input"
+            )
+            
             fecha_nac_contratante = st.text_input(
                 "FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="fecha_nac_contratante_input",
-                value=""
+                value=st.session_state.datos_formulario.get("fecha_nac_contratante", ""),
+                key="fecha_nac_contratante_input"
             )
             
             fecha_nac_asegurado = st.text_input(
                 "FECHA DE NAC ASEGURADO (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA", 
-                key="fecha_nac_asegurado_input",
-                value=""
+                value=st.session_state.datos_formulario.get("fecha_nac_asegurado", ""),
+                key="fecha_nac_asegurado_input"
             )
             
-            # Opciones actualizadas para estado civil
+            estado_civil_val = st.session_state.datos_formulario.get("estado_civil", "")
+            estado_civil_index = OPCIONES_ESTADO_CIVIL.index(estado_civil_val) if estado_civil_val in OPCIONES_ESTADO_CIVIL else 0
             estado_civil = st.selectbox(
                 "ESTADO CIVIL", 
                 options=OPCIONES_ESTADO_CIVIL,
-                key="estado_civil_select",
-                index=0
+                index=estado_civil_index,
+                key="estado_civil_select"
             )
         
         with col2:
-            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input", value="")
+            no_poliza = st.text_input(
+                "No. POLIZA *", 
+                value=st.session_state.datos_formulario.get("no_poliza", ""),
+                key="no_poliza_input"
+            )
             
             inicio_vigencia = st.text_input(
                 "INICIO DE VIGENCIA * (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="inicio_vigencia_input",
-                value=""
+                value=st.session_state.datos_formulario.get("inicio_vigencia", ""),
+                key="inicio_vigencia_input"
             )
             
             fin_vigencia = st.text_input(
                 "FIN DE VIGENCIA * (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="fin_vigencia_input",
-                value=""
+                value=st.session_state.datos_formulario.get("fin_vigencia", ""),
+                key="fin_vigencia_input"
             )
             
-            # Entrada de texto en vez de lista desplegable para FORMA DE PAGO
             forma_pago = st.text_input(
                 "FORMA DE PAGO", 
                 placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
-                key="forma_pago_input",
-                value=""
+                value=st.session_state.datos_formulario.get("forma_pago", ""),
+                key="forma_pago_input"
             )
             
-            # Entrada de texto en vez de lista desplegable para FRECUENCIA DE PAGO
             frecuencia_pago = st.text_input(
                 "FRECUENCIA DE PAGO", 
                 placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
-                key="frecuencia_pago_input",
-                value=""
+                value=st.session_state.datos_formulario.get("frecuencia_pago", ""),
+                key="frecuencia_pago_input"
             )
             
+            prima_anual_default = st.session_state.datos_formulario.get("prima_anual", 0.0)
             prima_anual = st.number_input(
                 "PRIMA ANUAL", 
                 min_value=0.0, 
                 format="%.2f",
-                key="prima_anual_input",
-                value=0.0
+                value=float(prima_anual_default) if prima_anual_default else 0.0,
+                key="prima_anual_input"
             )
             
-            producto = st.text_input("PRODUCTO", key="producto_input", value="")
+            producto = st.text_input(
+                "PRODUCTO", 
+                value=st.session_state.datos_formulario.get("producto", ""),
+                key="producto_input"
+            )
         
         st.subheader("Información Adicional")
         col3, col4 = st.columns(2)
         
         with col3:
-            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input", value="")
+            no_serie_auto = st.text_input(
+                "No Serie Auto", 
+                value=st.session_state.datos_formulario.get("no_serie_auto", ""),
+                key="no_serie_auto_input"
+            )
             
-            # Lista desplegable de aseguradoras predefinidas
+            aseguradora_val = st.session_state.datos_formulario.get("aseguradora", "")
+            aseguradora_index = ASEGURADORAS.index(aseguradora_val) if aseguradora_val in ASEGURADORAS else 0
             aseguradora = st.selectbox(
                 "ASEGURADORA",
                 options=ASEGURADORAS,
-                key="aseguradora_select",
-                index=0
+                index=aseguradora_index,
+                key="aseguradora_select"
             )
             
-            direccion = st.text_area("DIRECCIÓN", key="direccion_input", value="")
+            direccion = st.text_area(
+                "DIRECCIÓN", 
+                value=st.session_state.datos_formulario.get("direccion", ""),
+                key="direccion_input"
+            )
         
         with col4:
-            telefono = st.text_input("TELEFONO", key="telefono_input", value="")
-            email = st.text_input("EMAIL", key="email_input", value="")
-            notas = st.text_area("NOTAS", key="notas_input", value="")
-            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input", value="")
-    
-    # Botón fuera del contenedor del formulario para evitar envío con Enter
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-    
-    with col_btn2:
-        guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
+            telefono = st.text_input(
+                "TELEFONO", 
+                value=st.session_state.datos_formulario.get("telefono", ""),
+                key="telefono_input"
+            )
+            
+            email = st.text_input(
+                "EMAIL", 
+                value=st.session_state.datos_formulario.get("email", ""),
+                key="email_input"
+            )
+            
+            notas = st.text_area(
+                "NOTAS", 
+                value=st.session_state.datos_formulario.get("notas", ""),
+                key="notas_input"
+            )
+            
+            descripcion_auto = st.text_area(
+                "DESCRIPCION AUTO", 
+                value=st.session_state.datos_formulario.get("descripcion_auto", ""),
+                key="descripcion_auto_input"
+            )
+        
+        # --- BOTONES DEL FORMULARIO ---
+        col_b1, col_b2 = st.columns(2)
+        
+        with col_b1:
+            submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
+        
+        with col_b2:
+            cancel_button = st.form_submit_button("🚫 Cancelar", use_container_width=True, type="secondary")
 
-        # ============================================================
-        # FUNCIÓN PARA OBTENER ID EXISTENTE O NUEVO
-        # ============================================================
-        def obtener_id_cliente_o_nuevo(nombre_contratante):
-            """Si el cliente ya existe, devuelve su ID. Si no, genera uno nuevo."""
-            polizas = obtener_polizas()
-            for p in polizas:
-                if p.get("CONTRATANTE", "").strip().lower() == nombre_contratante.strip().lower():
-                    return p.get("No. Cliente", "")
-            return str(generar_nuevo_id_cliente())
-        
-        
-        # ============================================================
-        # GUARDAR PÓLIZA (sin duplicaciones ni errores de sesión)
-        # ============================================================
-        if "guardado_exitoso" not in st.session_state:
-            st.session_state.guardado_exitoso = False
-        
-        if guardar_button and not st.session_state.guardado_exitoso:
+        # --- PROCESAR BOTÓN CANCELAR ---
+        if cancel_button:
+            st.session_state.formulario_limpiado = False
+            st.session_state.datos_formulario = {}
+            st.rerun()
+
+        # --- PROCESAR BOTÓN DE ENVÍO ---
+        if submit_button:
             campos_faltantes = []
             if not contratante:
                 campos_faltantes.append("CONTRATANTE")
@@ -609,13 +580,45 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 campos_faltantes.append("INICIO DE VIGENCIA")
             if not fin_vigencia:
                 campos_faltantes.append("FIN DE VIGENCIA")
-        
+
             if campos_faltantes:
                 st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
             else:
-                # ✅ Obtener ID real (existente o nuevo)
+                # Guardar datos actuales en el estado de sesión
+                st.session_state.datos_formulario = {
+                    "no_cliente": str(nuevo_id),
+                    "contratante": contratante,
+                    "asegurado": asegurado,
+                    "beneficiario": beneficiario,
+                    "fecha_nac_contratante": fecha_nac_contratante,
+                    "fecha_nac_asegurado": fecha_nac_asegurado,
+                    "estado_civil": estado_civil,
+                    "no_poliza": no_poliza,
+                    "inicio_vigencia": inicio_vigencia,
+                    "fin_vigencia": fin_vigencia,
+                    "forma_pago": forma_pago,
+                    "frecuencia_pago": frecuencia_pago,
+                    "prima_anual": prima_anual,
+                    "producto": producto,
+                    "no_serie_auto": no_serie_auto,
+                    "aseguradora": aseguradora,
+                    "direccion": direccion,
+                    "telefono": telefono,
+                    "email": email,
+                    "notas": notas,
+                    "descripcion_auto": descripcion_auto
+                }
+
+                # Función para obtener ID existente o nuevo
+                def obtener_id_cliente_o_nuevo(nombre_contratante):
+                    polizas = obtener_polizas()
+                    for p in polizas:
+                        if p.get("CONTRATANTE", "").strip().lower() == nombre_contratante.strip().lower():
+                            return p.get("No. Cliente", "")
+                    return str(generar_nuevo_id_cliente())
+
                 id_cliente = obtener_id_cliente_o_nuevo(contratante)
-        
+
                 datos_poliza = [
                     id_cliente,
                     contratante,
@@ -639,14 +642,19 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     notas,
                     descripcion_auto
                 ]
-        
+
                 if agregar_poliza(datos_poliza):
                     st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
                     st.balloons()
                     st.session_state.guardado_exitoso = True
+                    st.session_state.formulario_limpiado = True
+                    st.session_state.datos_formulario = {}
+                    st.rerun()
+                else:
+                    st.error("❌ Error al guardar la póliza")
 
 # ============================================================
-# POST-GUARDADO: BOTONES
+# POST-GUARDADO: BOTONES (igual que antes)
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     if st.session_state.get("guardado_exitoso", False):
@@ -654,18 +662,17 @@ if menu == "📝 Data Entry - Nueva Póliza":
 
         col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
 
-        # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
         with col_clear_center:
             if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
-                # Limpiar el estado de guardado y mantener el ID
                 st.session_state.guardado_exitoso = False
-                # No limpiamos el formulario aquí, solo permitimos ingresar una nueva
+                st.session_state.formulario_limpiado = False
+                st.session_state.datos_formulario = {}
                 try:
                     st.experimental_set_query_params(scroll="top")
                 except Exception:
                     pass
                 st.rerun()
-
+                
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1324,4 +1331,5 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
