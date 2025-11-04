@@ -573,28 +573,28 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 st.balloons()
                 
                 # ✅ Limpieza segura del formulario después de guardar (versión Streamlit 1.40+)
-                    def limpiar_formulario():
-                        """Elimina las claves del formulario sin modificar widgets activos."""
-                        keys_a_borrar = [
-                            k for k in list(st.session_state.keys())
-                            if k.endswith('_input') or k.endswith('_select')
-                        ]
-                        for k in keys_a_borrar:
-                            try:
-                                del st.session_state[k]
-                            except KeyError:
-                                pass  # Si ya fue eliminado por Streamlit, ignorar
-                    
-                    # Después de guardar correctamente la póliza:
-                    if agregar_poliza(datos_poliza):
-                        st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
-                        st.balloons()
-                    
-                        # 🔄 Limpieza total del formulario
-                        limpiar_formulario()
-                    
-                        # Forzar rerun para reconstruir la UI vacía
-                        st.rerun()
+                def limpiar_formulario():
+                    """Elimina las claves del formulario sin modificar widgets activos."""
+                    keys_a_borrar = [
+                        k for k in list(st.session_state.keys())
+                        if k.endswith('_input') or k.endswith('_select')
+                    ]
+                    for k in keys_a_borrar:
+                        try:
+                            del st.session_state[k]
+                        except KeyError:
+                            pass  # Si ya fue eliminado por Streamlit, ignorar
+                
+                # Después de guardar correctamente la póliza:
+                if agregar_poliza(datos_poliza):
+                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
+                    st.balloons()
+                
+                    # 🔄 Limpieza total del formulario
+                    limpiar_formulario()
+                
+                    # Forzar rerun para reconstruir la UI vacía
+                    st.rerun()
 
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
@@ -1254,5 +1254,6 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
