@@ -625,7 +625,7 @@ if st.session_state.guardado_exitoso:
         # Truco para forzar scroll al inicio
         st.experimental_set_query_params(scroll="top")
 
-        st.experimental_rerun()
+        st.rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1284,6 +1284,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
