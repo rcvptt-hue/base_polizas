@@ -39,10 +39,6 @@ except Exception:
 # ============================================================
 def inicializar_estado_formulario():
     """Inicializa el estado para el manejo de formularios sin recargas constantes"""
-    if 'formulario_limpiado' not in st.session_state:
-        st.session_state.formulario_limpiado = False
-    if 'formulario_inicializado' not in st.session_state:
-        st.session_state.formulario_inicializado = True
     if 'guardado_exitoso' not in st.session_state:
         st.session_state.guardado_exitoso = False
     if 'datos_formulario' not in st.session_state:
@@ -50,16 +46,6 @@ def inicializar_estado_formulario():
 
 # Llamar a la inicialización al inicio
 inicializar_estado_formulario()
-
-# ============================================================
-# FUNCIÓN MEJORADA PARA LIMPIAR FORMULARIOS
-# ============================================================
-def limpiar_formulario_nueva_poliza():
-    """Limpia todos los campos del formulario usando el patrón del primer código"""
-    st.session_state.formulario_limpiado = True
-    st.session_state.guardado_exitoso = False
-    st.session_state.datos_formulario = {}
-    st.rerun()
 
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
@@ -352,7 +338,7 @@ if st.sidebar.button("🔄 Limpiar Cache"):
     st.rerun()
 
 # ============================================================
-# 1. DATA ENTRY - NUEVA PÓLIZA (VERSIÓN MEJORADA)
+# 1. DATA ENTRY - NUEVA PÓLIZA (VERSIÓN SIMPLIFICADA)
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
@@ -382,28 +368,10 @@ if menu == "📝 Data Entry - Nueva Póliza":
         "VIUDO/A"
     ]
     
-    # --- Botón para cancelar edición ---
-    if st.session_state.formulario_limpiado:
-        if st.button("❌ Cancelar Limpieza", key="btn_cancelar_limpieza"):
-            st.session_state.formulario_limpiado = False
-            st.session_state.datos_formulario = {}
-            st.rerun()
-
     # --- FORMULARIO PRINCIPAL ---
     with st.form("form_nueva_poliza", clear_on_submit=True):
         st.subheader("🧾 Información básica")
         
-        # Mostrar información de estado
-        if st.session_state.formulario_limpiado:
-            st.info("Formulario listo para nuevos datos")
-        
-        col_titulo, col_boton = st.columns([4, 1])
-        with col_titulo:
-            st.write("Complete los datos de la nueva póliza:")
-        with col_boton:
-            if st.form_submit_button("🧹 Limpiar campos", type="secondary", use_container_width=True):
-                limpiar_formulario_nueva_poliza()
-
         col1, col2 = st.columns(2)
         
         with col1:
@@ -552,20 +520,8 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 key="descripcion_auto_input"
             )
         
-        # --- BOTONES DEL FORMULARIO ---
-        col_b1, col_b2 = st.columns(2)
-        
-        with col_b1:
-            submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
-        
-        with col_b2:
-            cancel_button = st.form_submit_button("🚫 Cancelar", use_container_width=True, type="secondary")
-
-        # --- PROCESAR BOTÓN CANCELAR ---
-        if cancel_button:
-            st.session_state.formulario_limpiado = False
-            st.session_state.datos_formulario = {}
-            st.rerun()
+        # --- BOTÓN DE ENVÍO ÚNICO ---
+        submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
 
         # --- PROCESAR BOTÓN DE ENVÍO ---
         if submit_button:
@@ -647,31 +603,26 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
                     st.balloons()
                     st.session_state.guardado_exitoso = True
-                    st.session_state.formulario_limpiado = True
                     st.session_state.datos_formulario = {}
                     st.rerun()
                 else:
                     st.error("❌ Error al guardar la póliza")
 
 # ============================================================
-# POST-GUARDADO: BOTONES (igual que antes)
+# POST-GUARDADO: BOTÓN PARA REGISTRAR OTRA PÓLIZA
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     if st.session_state.get("guardado_exitoso", False):
         st.info("Póliza guardada correctamente.")
 
-        col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
-
-        with col_clear_center:
-            if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
-                st.session_state.guardado_exitoso = False
-                st.session_state.formulario_limpiado = False
-                st.session_state.datos_formulario = {}
-                try:
-                    st.experimental_set_query_params(scroll="top")
-                except Exception:
-                    pass
-                st.rerun()
+        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
+            st.session_state.guardado_exitoso = False
+            st.session_state.datos_formulario = {}
+            try:
+                st.experimental_set_query_params(scroll="top")
+            except Exception:
+                pass
+            st.rerun()
                 
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
@@ -1331,5 +1282,6 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
