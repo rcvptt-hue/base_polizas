@@ -36,6 +36,30 @@ try:
         )
 except Exception:
     pass
+
+# ============================================================
+# FUNCIÓN PARA LIMPIAR FORMULARIO DE NUEVA PÓLIZA
+# ============================================================
+def limpiar_formulario_nueva_poliza():
+    """Limpia todos los campos del formulario de nueva póliza excepto el ID de cliente"""
+    # Lista de todas las claves que deben limpiarse
+    claves_a_limpiar = [
+        "contratante_input", "asegurado_input", "beneficiario_input",
+        "fecha_nac_contratante_input", "fecha_nac_asegurado_input", "estado_civil_select",
+        "no_poliza_input", "inicio_vigencia_input", "fin_vigencia_input",
+        "forma_pago_input", "frecuencia_pago_input", "prima_anual_input",
+        "producto_input", "no_serie_auto_input", "aseguradora_select",
+        "direccion_input", "telefono_input", "email_input", "notas_input",
+        "descripcion_auto_input", "guardado_exitoso"
+    ]
+    
+    # Limpiar cada clave si existe
+    for clave in claves_a_limpiar:
+        if clave in st.session_state:
+            del st.session_state[clave]
+    
+    # Forzar rerun para actualizar la interfaz
+    st.rerun()
     
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
@@ -457,121 +481,107 @@ if menu == "📝 Data Entry - Nueva Póliza":
         # ============================================================
         # ENCABEZADO: Información básica + botón de limpieza
         # ============================================================
-        # ============================================================
-        # FUNCIÓN: Limpieza segura de formulario
-        # ============================================================
-        def limpiar_formulario_safe(preserve_no_cliente=True):
-            """
-            Borra del session_state las claves creadas por los inputs del formulario.
-            preserve_no_cliente: si True no borra la clave 'no_cliente_auto' (ID generado).
-            """
-            for k in list(st.session_state.keys()):
-                if (
-                    k.endswith("_input")
-                    or k.endswith("_select")
-                    or k.endswith("_form")
-                    or k in ["contratante", "asegurado", "beneficiario", "telefono", "email"]
-                ):
-                    if preserve_no_cliente and k == "no_cliente_auto":
-                        continue
-                    try:
-                        del st.session_state[k]
-                    except Exception:
-                        pass
- 
         col_titulo, col_boton = st.columns([4, 1])
         with col_titulo:
             st.subheader("🧾 Información básica")
         with col_boton:
             if st.button("🧹 Limpiar campos", key="btn_limpiar_form"):
-                limpiar_formulario_safe(preserve_no_cliente=True)
-                st.rerun()
+                limpiar_formulario_nueva_poliza()
         col1, col2 = st.columns(2)
         
         with col1:
             st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
-            contratante = st.text_input("CONTRATANTE *", key="contratante_input")
-            asegurado = st.text_input("ASEGURADO *", key="asegurado_input")
-            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input")
+            contratante = st.text_input("CONTRATANTE *", key="contratante_input", value="")
+            asegurado = st.text_input("ASEGURADO *", key="asegurado_input", value="")
+            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input", value="")
             
             # Campos de fecha usando texto (más flexible para años anteriores)
             fecha_nac_contratante = st.text_input(
                 "FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="fecha_nac_contratante_input"
+                key="fecha_nac_contratante_input",
+                value=""
             )
             
             fecha_nac_asegurado = st.text_input(
                 "FECHA DE NAC ASEGURADO (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA", 
-                key="fecha_nac_asegurado_input"
+                key="fecha_nac_asegurado_input",
+                value=""
             )
             
             # Opciones actualizadas para estado civil
             estado_civil = st.selectbox(
                 "ESTADO CIVIL", 
                 options=OPCIONES_ESTADO_CIVIL,
-                key="estado_civil_select"
+                key="estado_civil_select",
+                index=0
             )
         
         with col2:
-            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input")
+            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input", value="")
             
             inicio_vigencia = st.text_input(
                 "INICIO DE VIGENCIA * (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="inicio_vigencia_input"
+                key="inicio_vigencia_input",
+                value=""
             )
             
             fin_vigencia = st.text_input(
                 "FIN DE VIGENCIA * (DD/MM/AAAA)", 
                 placeholder="DD/MM/AAAA",
-                key="fin_vigencia_input"
+                key="fin_vigencia_input",
+                value=""
             )
             
             # Entrada de texto en vez de lista desplegable para FORMA DE PAGO
             forma_pago = st.text_input(
                 "FORMA DE PAGO", 
                 placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
-                key="forma_pago_input"
+                key="forma_pago_input",
+                value=""
             )
             
             # Entrada de texto en vez de lista desplegable para FRECUENCIA DE PAGO
             frecuencia_pago = st.text_input(
                 "FRECUENCIA DE PAGO", 
                 placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
-                key="frecuencia_pago_input"
+                key="frecuencia_pago_input",
+                value=""
             )
             
             prima_anual = st.number_input(
                 "PRIMA ANUAL", 
                 min_value=0.0, 
                 format="%.2f",
-                key="prima_anual_input"
+                key="prima_anual_input",
+                value=0.0
             )
             
-            producto = st.text_input("PRODUCTO", key="producto_input")
+            producto = st.text_input("PRODUCTO", key="producto_input", value="")
         
         st.subheader("Información Adicional")
         col3, col4 = st.columns(2)
         
         with col3:
-            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input")
+            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input", value="")
             
             # Lista desplegable de aseguradoras predefinidas
             aseguradora = st.selectbox(
                 "ASEGURADORA",
                 options=ASEGURADORAS,
-                key="aseguradora_select"
+                key="aseguradora_select",
+                index=0
             )
             
-            direccion = st.text_area("DIRECCIÓN", key="direccion_input")
+            direccion = st.text_area("DIRECCIÓN", key="direccion_input", value="")
         
         with col4:
-            telefono = st.text_input("TELEFONO", key="telefono_input")
-            email = st.text_input("EMAIL", key="email_input")
-            notas = st.text_area("NOTAS", key="notas_input")
-            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input")
+            telefono = st.text_input("TELEFONO", key="telefono_input", value="")
+            email = st.text_input("EMAIL", key="email_input", value="")
+            notas = st.text_area("NOTAS", key="notas_input", value="")
+            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input", value="")
     
     # Botón fuera del contenedor del formulario para evitar envío con Enter
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
@@ -579,29 +589,6 @@ if menu == "📝 Data Entry - Nueva Póliza":
     with col_btn2:
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
 
-        # ============================================================
-        # FUNCIÓN: limpieza segura del formulario (definir UNA vez, a nivel raíz)
-        # ============================================================
-        def limpiar_formulario_safe(preserve_no_cliente=True):
-            """
-            Borra del session_state las claves creadas por los inputs del formulario.
-            preserve_no_cliente: si True no borra la clave 'no_cliente_auto' (ID generado).
-            """
-            for k in list(st.session_state.keys()):
-                if (
-                    k.endswith("_input")
-                    or k.endswith("_select")
-                    or k.endswith("_form")
-                    or k in ["contratante", "asegurado", "beneficiario", "telefono", "email"]
-                ):
-                    if preserve_no_cliente and k == "no_cliente_auto":
-                        continue
-                    try:
-                        del st.session_state[k]
-                    except Exception:
-                        pass
-        
-        
         # ============================================================
         # FUNCIÓN PARA OBTENER ID EXISTENTE O NUEVO
         # ============================================================
@@ -666,32 +653,29 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 if agregar_poliza(datos_poliza):
                     st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
                     st.balloons()
-                    limpiar_formulario_safe()
                     st.session_state.guardado_exitoso = True
 
 # ============================================================
 # POST-GUARDADO: BOTONES
 # ============================================================
-if st.session_state.get("guardado_exitoso", False):
-    st.info("Póliza guardada correctamente.")
+if menu == "📝 Data Entry - Nueva Póliza":
+    if st.session_state.get("guardado_exitoso", False):
+        st.info("Póliza guardada correctamente.")
 
-    col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
+        col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
 
-    # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
-    with col_clear_center:
-        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
-            limpiar_formulario_safe(preserve_no_cliente=True)
-            st.session_state.guardado_exitoso = False
+        # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
+        with col_clear_center:
+            if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
+                # Limpiar el estado de guardado y mantener el ID
+                st.session_state.guardado_exitoso = False
+                # No limpiamos el formulario aquí, solo permitimos ingresar una nueva
+                try:
+                    st.experimental_set_query_params(scroll="top")
+                except Exception:
+                    pass
+                st.rerun()
 
-            try:
-                st.experimental_set_query_params(scroll="top")
-            except Exception:
-                pass
-
-            st.rerun()
-
-    with col_clear_right:
-        st.empty()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1350,25 +1334,3 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
