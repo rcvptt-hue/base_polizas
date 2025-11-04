@@ -532,39 +532,57 @@ if menu == "📝 Data Entry - Nueva Póliza":
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
 
         # ============================================================
-        # FUNCIÓN PARA LIMPIAR EL FORMULARIO (segura para Streamlit 1.40+)
+        # FUNCIÓN PARA LIMPIAR EL FORMULARIO
         # ============================================================
-        
         def limpiar_formulario():
-            """Elimina las claves del formulario sin modificar widgets activos."""
-            keys_a_borrar = [
-                k for k in list(st.session_state.keys())
-                if k.endswith('_input') or k.endswith('_select')
-            ]
-            for k in keys_a_borrar:
-                try:
-                    del st.session_state[k]
-                except KeyError:
-                    pass  # Si ya fue eliminado por Streamlit, ignorar
-                
+            """Elimina todas las claves del formulario sin romper widgets activos."""
+            for k in list(st.session_state.keys()):
+                if k.endswith('_input') or k.endswith('_select'):
+                    try:
+                        del st.session_state[k]
+                    except Exception:
+                        pass
+        
+        
+        # ============================================================
+        # FUNCIÓN PARA OBTENER ID EXISTENTE O NUEVO
+        # ============================================================
+        def obtener_id_cliente_o_nuevo(nombre_contratante):
+            """Si el cliente ya existe, devuelve su ID. Si no, genera uno nuevo."""
+            polizas = obtener_polizas()
+            for p in polizas:
+                if p.get("CONTRATANTE", "").strip().lower() == nombre_contratante.strip().lower():
+                    return p.get("No. Cliente", "")
+            return str(generar_nuevo_id_cliente())
+        
+        
+        # ============================================================
+        # GUARDAR PÓLIZA (sin duplicaciones ni errores de sesión)
+        # ============================================================
         if "guardado_exitoso" not in st.session_state:
             st.session_state.guardado_exitoso = False
-    
+        
         if guardar_button and not st.session_state.guardado_exitoso:
-            # Validar campos obligatorios
             campos_faltantes = []
-            if not contratante: campos_faltantes.append("CONTRATANTE")
-            if not asegurado: campos_faltantes.append("ASEGURADO")
-            if not no_poliza: campos_faltantes.append("No. POLIZA")
-            if not inicio_vigencia: campos_faltantes.append("INICIO DE VIGENCIA")
-            if not fin_vigencia: campos_faltantes.append("FIN DE VIGENCIA")
+            if not contratante:
+                campos_faltantes.append("CONTRATANTE")
+            if not asegurado:
+                campos_faltantes.append("ASEGURADO")
+            if not no_poliza:
+                campos_faltantes.append("No. POLIZA")
+            if not inicio_vigencia:
+                campos_faltantes.append("INICIO DE VIGENCIA")
+            if not fin_vigencia:
+                campos_faltantes.append("FIN DE VIGENCIA")
         
             if campos_faltantes:
                 st.error(f"❌ Campos obligatorios faltantes: {', '.join(campos_faltantes)}")
             else:
-                # Preparar datos para guardar
+                # ✅ Obtener ID real (existente o nuevo)
+                id_cliente = obtener_id_cliente_o_nuevo(contratante)
+        
                 datos_poliza = [
-                    str(nuevo_id),
+                    id_cliente,
                     contratante,
                     asegurado,
                     beneficiario,
@@ -588,39 +606,26 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
         
                 if agregar_poliza(datos_poliza):
-                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
+                    st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
                     st.balloons()
                     limpiar_formulario()
-        
-                    # ✅ Marcar como guardado para evitar duplicación
                     st.session_state.guardado_exitoso = True
 
 # ============================================================
 # POST-GUARDADO: BOTÓN PARA NUEVA PÓLIZA
 # ============================================================
 if st.session_state.guardado_exitoso:
-    st.markdown('<a name="top"></a>', unsafe_allow_html=True)
     st.info("Póliza guardada correctamente.")
 
-    # Botón para volver arriba y reiniciar formulario
     if st.button("🆕 Registrar otra póliza", use_container_width=True):
+        # Limpia todo antes del rerun
         limpiar_formulario()
         st.session_state.guardado_exitoso = False
 
-        # Este truco coloca el foco arriba del todo sin usar JS
-        st.markdown(
-            """
-            <style>
-                html, body {scroll-behavior: smooth !important;}
-            </style>
-            <script>
-                window.scrollTo(0, 0);
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
+        # Truco para forzar scroll al inicio
+        st.experimental_set_query_params(scroll="top")
 
-        st.rerun()
+        st.experimental_rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1279,6 +1284,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
