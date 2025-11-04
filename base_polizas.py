@@ -454,7 +454,16 @@ if menu == "📝 Data Entry - Nueva Póliza":
     form_container = st.container()
     
     with form_container:
-        st.subheader("Información Básica")
+        # ============================================================
+        # ENCABEZADO: Información básica + botón de limpieza
+        # ============================================================
+        col_titulo, col_boton = st.columns([4, 1])
+        with col_titulo:
+            st.subheader("🧾 Información básica")
+        with col_boton:
+            if st.button("🧹 Limpiar campos", key="btn_limpiar_form"):
+                limpiar_formulario_safe(preserve_no_cliente=True)
+                st.rerun()
         col1, col2 = st.columns(2)
         
         with col1:
@@ -556,17 +565,19 @@ if menu == "📝 Data Entry - Nueva Póliza":
             Borra del session_state las claves creadas por los inputs del formulario.
             preserve_no_cliente: si True no borra la clave 'no_cliente_auto' (ID generado).
             """
-            keys_a_borrar = [
-                k for k in list(st.session_state.keys())
-                if (k.endswith('_input') or k.endswith('_select') or k.endswith('_form'))
-            ]
-            for k in keys_a_borrar:
-                if preserve_no_cliente and k == "no_cliente_auto":
-                    continue
-                try:
-                    del st.session_state[k]
-                except Exception:
-                    pass  # ignorar si no se puede borrar
+            for k in list(st.session_state.keys()):
+                if (
+                    k.endswith("_input")
+                    or k.endswith("_select")
+                    or k.endswith("_form")
+                    or k in ["contratante", "asegurado", "beneficiario", "telefono", "email"]
+                ):
+                    if preserve_no_cliente and k == "no_cliente_auto":
+                        continue
+                    try:
+                        del st.session_state[k]
+                    except Exception:
+                        pass
         
         
         # ============================================================
@@ -1323,6 +1334,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
