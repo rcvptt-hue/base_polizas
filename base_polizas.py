@@ -21,9 +21,9 @@ st.set_page_config(
 )
 
 # ============================================================
-# FUNCIÓN DE VALIDACIÓN DE FECHAS
+# FUNCIÓN DE VALIDACIÓN DE FECHAS MEJORADA
 # ============================================================
-def validar_fecha(fecha_str):
+def validar_fecha(fecha_str, es_vigencia=False):
     """Valida que la fecha tenga formato dd/mm/yyyy y sea una fecha válida"""
     if not fecha_str or fecha_str.strip() == "":
         return True, ""  # Fecha vacía es válida (para campos no obligatorios)
@@ -43,19 +43,39 @@ def validar_fecha(fecha_str):
         datetime(anio, mes, dia)
         
         # Validaciones adicionales
-        if anio < 1900 or anio > datetime.now().year:
-            return False, f"Año {anio} fuera de rango válido (1900-{datetime.now().year})"
-        
-        if mes < 1 or mes > 12:
-            return False, "Mes debe estar entre 1 y 12"
-        
-        if dia < 1 or dia > 31:
-            return False, "Día debe estar entre 1 y 31"
+        if es_vigencia:
+            # Para vigencias, solo validamos formato y fecha real, sin límite de año
+            if mes < 1 or mes > 12:
+                return False, "Mes debe estar entre 1 y 12"
+            
+            if dia < 1 or dia > 31:
+                return False, "Día debe estar entre 1 y 31"
+        else:
+            # Para fechas de nacimiento, mantenemos las validaciones originales
+            if anio < 1900 or anio > datetime.now().year:
+                return False, f"Año {anio} fuera de rango válido (1900-{datetime.now().year})"
+            
+            if mes < 1 or mes > 12:
+                return False, "Mes debe estar entre 1 y 12"
+            
+            if dia < 1 or dia > 31:
+                return False, "Día debe estar entre 1 y 31"
             
         return True, ""
         
     except ValueError as e:
         return False, "La fecha no es válida (ejemplo: 15/03/1990)"
+
+# ============================================================
+# INICIALIZACIÓN DEL ESTADO DEL FORMULARIO
+# ============================================================
+def inicializar_estado_formulario():
+    """Inicializa el estado para mantener los datos del formulario"""
+    if 'datos_formulario' not in st.session_state:
+        st.session_state.datos_formulario = {}
+
+# Llamar a la inicialización al inicio
+inicializar_estado_formulario()
 
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS
@@ -376,51 +396,190 @@ if st.sidebar.button("🔄 Limpiar Cache"):
     st.rerun()
 
 # ============================================================
-# DATA ENTRY - NUEVA PÓLIZA (CON VALIDACIÓN)
+# DATA ENTRY - NUEVA PÓLIZA (CON VALIDACIÓN MEJORADA)
 # ============================================================
 if menu == "📝 Data Entry - Nueva Póliza":
     st.header("📝 Ingresar Nueva Póliza")
     
+    # Calcular ID pero no mostrarlo
     nuevo_id = generar_nuevo_id_cliente()
     
-    with st.form("form_nueva_poliza", clear_on_submit=True):
+    # Usar formulario sin clear_on_submit para mantener datos en caso de error
+    with st.form("form_nueva_poliza"):
         col1, col2 = st.columns(2)
         
         with col1:
-            st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
-            contratante = st.text_input("CONTRATANTE *", key="contratante_input")
-            asegurado = st.text_input("ASEGURADO *", key="asegurado_input")
-            beneficiario = st.text_input("BENEFICIARIO", key="beneficiario_input")
-            fecha_nac_contratante = st.text_input("FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fecha_nac_contratante_input")
-            fecha_nac_asegurado = st.text_input("FECHA DE NAC ASEGURADO (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fecha_nac_asegurado_input")
-            estado_civil = st.selectbox("ESTADO CIVIL", options=OPCIONES_ESTADO_CIVIL, key="estado_civil_select")
+            # No mostrar el campo "No. Cliente" pero sí calcularlo
+            # st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
+            
+            contratante = st.text_input(
+                "CONTRATANTE *", 
+                value=st.session_state.datos_formulario.get("contratante", ""),
+                key="contratante_input"
+            )
+            
+            asegurado = st.text_input(
+                "ASEGURADO *", 
+                value=st.session_state.datos_formulario.get("asegurado", ""),
+                key="asegurado_input"
+            )
+            
+            beneficiario = st.text_input(
+                "BENEFICIARIO", 
+                value=st.session_state.datos_formulario.get("beneficiario", ""),
+                key="beneficiario_input"
+            )
+            
+            fecha_nac_contratante = st.text_input(
+                "FECHA DE NAC CONTRATANTE (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                value=st.session_state.datos_formulario.get("fecha_nac_contratante", ""),
+                key="fecha_nac_contratante_input"
+            )
+            
+            fecha_nac_asegurado = st.text_input(
+                "FECHA DE NAC ASEGURADO (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA", 
+                value=st.session_state.datos_formulario.get("fecha_nac_asegurado", ""),
+                key="fecha_nac_asegurado_input"
+            )
+            
+            estado_civil_val = st.session_state.datos_formulario.get("estado_civil", "")
+            estado_civil_index = OPCIONES_ESTADO_CIVIL.index(estado_civil_val) if estado_civil_val in OPCIONES_ESTADO_CIVIL else 0
+            estado_civil = st.selectbox(
+                "ESTADO CIVIL", 
+                options=OPCIONES_ESTADO_CIVIL,
+                index=estado_civil_index,
+                key="estado_civil_select"
+            )
         
         with col2:
-            no_poliza = st.text_input("No. POLIZA *", key="no_poliza_input")
-            inicio_vigencia = st.text_input("INICIO DE VIGENCIA * (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="inicio_vigencia_input")
-            fin_vigencia = st.text_input("FIN DE VIGENCIA * (DD/MM/AAAA)", placeholder="DD/MM/AAAA", key="fin_vigencia_input")
-            forma_pago = st.text_input("FORMA DE PAGO", placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático", key="forma_pago_input")
-            frecuencia_pago = st.text_input("FRECUENCIA DE PAGO", placeholder="Ej: Anual, Semestral, Trimestral, Mensual", key="frecuencia_pago_input")
-            prima_anual = st.number_input("PRIMA ANUAL", min_value=0.0, format="%.2f", value=0.0, key="prima_anual_input")
-            producto = st.text_input("PRODUCTO", key="producto_input")
+            no_poliza = st.text_input(
+                "No. POLIZA *", 
+                value=st.session_state.datos_formulario.get("no_poliza", ""),
+                key="no_poliza_input"
+            )
+            
+            inicio_vigencia = st.text_input(
+                "INICIO DE VIGENCIA * (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                value=st.session_state.datos_formulario.get("inicio_vigencia", ""),
+                key="inicio_vigencia_input"
+            )
+            
+            fin_vigencia = st.text_input(
+                "FIN DE VIGENCIA * (DD/MM/AAAA)", 
+                placeholder="DD/MM/AAAA",
+                value=st.session_state.datos_formulario.get("fin_vigencia", ""),
+                key="fin_vigencia_input"
+            )
+            
+            forma_pago = st.text_input(
+                "FORMA DE PAGO", 
+                placeholder="Ej: Efectivo, Tarjeta, Transferencia, Débito Automático",
+                value=st.session_state.datos_formulario.get("forma_pago", ""),
+                key="forma_pago_input"
+            )
+            
+            frecuencia_pago = st.text_input(
+                "FRECUENCIA DE PAGO", 
+                placeholder="Ej: Anual, Semestral, Trimestral, Mensual",
+                value=st.session_state.datos_formulario.get("frecuencia_pago", ""),
+                key="frecuencia_pago_input"
+            )
+            
+            prima_anual_default = st.session_state.datos_formulario.get("prima_anual", 0.0)
+            prima_anual = st.number_input(
+                "PRIMA ANUAL", 
+                min_value=0.0, 
+                format="%.2f",
+                value=float(prima_anual_default) if prima_anual_default else 0.0,
+                key="prima_anual_input"
+            )
+            
+            producto = st.text_input(
+                "PRODUCTO", 
+                value=st.session_state.datos_formulario.get("producto", ""),
+                key="producto_input"
+            )
         
         st.subheader("Información Adicional")
         col3, col4 = st.columns(2)
         
         with col3:
-            no_serie_auto = st.text_input("No Serie Auto", key="no_serie_auto_input")
-            aseguradora = st.selectbox("ASEGURADORA", options=ASEGURADORAS, key="aseguradora_select")
-            direccion = st.text_area("DIRECCIÓN", key="direccion_input")
+            no_serie_auto = st.text_input(
+                "No Serie Auto", 
+                value=st.session_state.datos_formulario.get("no_serie_auto", ""),
+                key="no_serie_auto_input"
+            )
+            
+            aseguradora_val = st.session_state.datos_formulario.get("aseguradora", "")
+            aseguradora_index = ASEGURADORAS.index(aseguradora_val) if aseguradora_val in ASEGURADORAS else 0
+            aseguradora = st.selectbox(
+                "ASEGURADORA",
+                options=ASEGURADORAS,
+                index=aseguradora_index,
+                key="aseguradora_select"
+            )
+            
+            direccion = st.text_area(
+                "DIRECCIÓN", 
+                value=st.session_state.datos_formulario.get("direccion", ""),
+                key="direccion_input"
+            )
         
         with col4:
-            telefono = st.text_input("TELEFONO", key="telefono_input")
-            email = st.text_input("EMAIL", key="email_input")
-            notas = st.text_area("NOTAS", key="notas_input")
-            descripcion_auto = st.text_area("DESCRIPCION AUTO", key="descripcion_auto_input")
+            telefono = st.text_input(
+                "TELEFONO", 
+                value=st.session_state.datos_formulario.get("telefono", ""),
+                key="telefono_input"
+            )
+            
+            email = st.text_input(
+                "EMAIL", 
+                value=st.session_state.datos_formulario.get("email", ""),
+                key="email_input"
+            )
+            
+            notas = st.text_area(
+                "NOTAS", 
+                value=st.session_state.datos_formulario.get("notas", ""),
+                key="notas_input"
+            )
+            
+            descripcion_auto = st.text_area(
+                "DESCRIPCION AUTO", 
+                value=st.session_state.datos_formulario.get("descripcion_auto", ""),
+                key="descripcion_auto_input"
+            )
         
         submit_button = st.form_submit_button("💾 Guardar Póliza", use_container_width=True, type="primary")
 
         if submit_button:
+            # Guardar todos los datos en session_state antes de validar
+            st.session_state.datos_formulario = {
+                "contratante": contratante,
+                "asegurado": asegurado,
+                "beneficiario": beneficiario,
+                "fecha_nac_contratante": fecha_nac_contratante,
+                "fecha_nac_asegurado": fecha_nac_asegurado,
+                "estado_civil": estado_civil,
+                "no_poliza": no_poliza,
+                "inicio_vigencia": inicio_vigencia,
+                "fin_vigencia": fin_vigencia,
+                "forma_pago": forma_pago,
+                "frecuencia_pago": frecuencia_pago,
+                "prima_anual": prima_anual,
+                "producto": producto,
+                "no_serie_auto": no_serie_auto,
+                "aseguradora": aseguradora,
+                "direccion": direccion,
+                "telefono": telefono,
+                "email": email,
+                "notas": notas,
+                "descripcion_auto": descripcion_auto
+            }
+
             # Validar campos obligatorios
             campos_faltantes = []
             if not contratante:
@@ -434,26 +593,26 @@ if menu == "📝 Data Entry - Nueva Póliza":
             if not fin_vigencia:
                 campos_faltantes.append("FIN DE VIGENCIA")
 
-            # Validar formatos de fecha
+            # Validar formatos de fecha (con reglas diferentes para vigencias)
             errores_fecha = []
             
             if fecha_nac_contratante:
-                valido, error = validar_fecha(fecha_nac_contratante)
+                valido, error = validar_fecha(fecha_nac_contratante, es_vigencia=False)
                 if not valido:
                     errores_fecha.append(f"Fecha Nacimiento Contratante: {error}")
             
             if fecha_nac_asegurado:
-                valido, error = validar_fecha(fecha_nac_asegurado)
+                valido, error = validar_fecha(fecha_nac_asegurado, es_vigencia=False)
                 if not valido:
                     errores_fecha.append(f"Fecha Nacimiento Asegurado: {error}")
             
             if inicio_vigencia:
-                valido, error = validar_fecha(inicio_vigencia)
+                valido, error = validar_fecha(inicio_vigencia, es_vigencia=True)
                 if not valido:
                     errores_fecha.append(f"Inicio Vigencia: {error}")
             
             if fin_vigencia:
-                valido, error = validar_fecha(fin_vigencia)
+                valido, error = validar_fecha(fin_vigencia, es_vigencia=True)
                 if not valido:
                     errores_fecha.append(f"Fin Vigencia: {error}")
 
@@ -501,6 +660,8 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
 
                 if agregar_poliza(datos_poliza):
+                    # Limpiar el formulario solo si se guardó exitosamente
+                    st.session_state.datos_formulario = {}
                     st.rerun()
 
 # ============================================================
@@ -1253,6 +1414,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
