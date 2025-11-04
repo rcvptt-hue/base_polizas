@@ -573,24 +573,31 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 st.balloons()
                 
                 # Limpiar el formulario usando session state
-                # <-- CORRECCIÓN: iterar sobre una lista copia de las keys para evitar modificar el dict mientras se itera
-                for key in list(st.session_state.keys()):
-                    if key.endswith('_input') or key.endswith('_select'):
-                        if key not in ['no_cliente_auto']:  # No limpiar el ID
-                            try:
-                                st.session_state[key] = ""
-                            except KeyError:
-                                # Si la clave desapareció entre tiempo, la ignoramos
-                                pass
+                # ✅ Corrección: limpiar sin modificar claves que ya no existen
+                try:
+                    keys_para_limpiar = [
+                        key for key in list(st.session_state.keys())
+                        if (key.endswith('_input') or key.endswith('_select'))
+                        and key not in ['no_cliente_auto']
+                    ]
+                    # Solo actualizar si la clave existe todavía
+                    for key in keys_para_limpiar:
+                        if key in st.session_state:
+                            st.session_state.update({key: ""})
+                except Exception as e:
+                    st.warning(f"No se pudieron limpiar todos los campos: {e}")
                 
-                # Limpiar campos específicos
-                st.session_state.prima_anual_input = 0.0
-                st.session_state.estado_civil_select = ""
-                # CORRECCIÓN: estos campos eran text_input, así que usamos *_input
-                st.session_state.forma_pago_input = ""
-                st.session_state.frecuencia_pago_input = ""
+                # Limpiar campos numéricos o específicos
+                if "prima_anual_input" in st.session_state:
+                    st.session_state.prima_anual_input = 0.0
+                if "estado_civil_select" in st.session_state:
+                    st.session_state.estado_civil_select = ""
+                if "forma_pago_input" in st.session_state:
+                    st.session_state.forma_pago_input = ""
+                if "frecuencia_pago_input" in st.session_state:
+                    st.session_state.frecuencia_pago_input = ""
                 
-                # Forzar rerun para actualizar la interfaz
+                # Forzar rerun para refrescar
                 st.rerun()
 
 # ============================================================
@@ -1251,3 +1258,4 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
