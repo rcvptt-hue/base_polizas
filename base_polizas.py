@@ -531,17 +531,26 @@ if menu == "📝 Data Entry - Nueva Póliza":
     with col_btn2:
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
 
-        # ============================================================
-        # FUNCIÓN PARA LIMPIAR EL FORMULARIO
-        # ============================================================
-        def limpiar_formulario():
-            """Elimina todas las claves del formulario sin romper widgets activos."""
-            for k in list(st.session_state.keys()):
-                if k.endswith('_input') or k.endswith('_select'):
-                    try:
-                        del st.session_state[k]
-                    except Exception:
-                        pass
+        # ---------------------------
+        # FUNCIÓN: limpieza segura
+        # ---------------------------
+        def limpiar_formulario_safe(preserve_no_cliente=True):
+            """
+            Borra del session_state las claves creadas por los inputs del formulario.
+            preserve_no_cliente: si True no borra la clave 'no_cliente_auto' (ID generado).
+            """
+            keys_a_borrar = [
+                k for k in list(st.session_state.keys())
+                if (k.endswith('_input') or k.endswith('_select') or k.endswith('_form'))
+            ]
+            for k in keys_a_borrar:
+                if preserve_no_cliente and k == "no_cliente_auto":
+                    continue
+                try:
+                    del st.session_state[k]
+                except Exception:
+                    # ignorar cualquier error al borrar (clave inexistente / protegida)
+                    pass
         
         
         # ============================================================
@@ -617,15 +626,25 @@ if menu == "📝 Data Entry - Nueva Póliza":
 if st.session_state.guardado_exitoso:
     st.info("Póliza guardada correctamente.")
 
-    if st.button("🆕 Registrar otra póliza", use_container_width=True):
-        # Limpia todo antes del rerun
-        limpiar_formulario()
-        st.session_state.guardado_exitoso = False
-
-        # Truco para forzar scroll al inicio
-        st.experimental_set_query_params(scroll="top")
-
-        st.rerun()
+    # ---------------------------
+    # BOTÓN: Limpiar formulario (colocado junto a botones de tu formulario)
+    # ---------------------------
+    # ponlo en la misma sección donde tienes el botón "Guardar Póliza"
+    col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
+    with col_clear_left:
+        if st.button("🧹 Limpiar formulario", key="limpiar_form_btn"):
+            # 1) borrar los campos
+            limpiar_formulario_safe(preserve_no_cliente=True)
+    
+            # 2) (opcional) forzar que la app muestre la UI limpia y que el scroll quede arriba
+            #    experimental_set_query_params suele mover la vista al inicio en la recarga.
+            try:
+                st.experimental_set_query_params(scroll="top")
+            except Exception:
+                pass
+    
+            # 3) recargar para reconstruir los widgets vacíos
+            st.rerun()
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1284,6 +1303,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
