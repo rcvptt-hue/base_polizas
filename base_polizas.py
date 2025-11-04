@@ -20,6 +20,23 @@ st.set_page_config(
     layout="wide"
 )
 
+# ------------------------------------------------------------
+# Manejo de scroll tras recarga: si existe ?scroll=top -> hacer scroll to top
+# Debe ir al inicio del archivo, inmediatamente después de st.set_page_config(...)
+# ------------------------------------------------------------
+try:
+    params = st.experimental_get_query_params()
+    if params.get("scroll", [""])[0] == "top":
+        # Borrar el param para que el efecto no se repita
+        st.experimental_set_query_params()
+        # Ejecutar JS para subir al inicio (se ejecuta al renderizar la página)
+        st.markdown(
+            "<script>window.scrollTo({top: 0, behavior: 'smooth'});</script>",
+            unsafe_allow_html=True
+        )
+except Exception:
+    pass
+    
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
 # ============================================================
@@ -531,9 +548,9 @@ if menu == "📝 Data Entry - Nueva Póliza":
     with col_btn2:
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
 
-        # ---------------------------
-        # FUNCIÓN: limpieza segura
-        # ---------------------------
+        # ============================================================
+        # FUNCIÓN: limpieza segura del formulario (definir UNA vez, a nivel raíz)
+        # ============================================================
         def limpiar_formulario_safe(preserve_no_cliente=True):
             """
             Borra del session_state las claves creadas por los inputs del formulario.
@@ -549,8 +566,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 try:
                     del st.session_state[k]
                 except Exception:
-                    # ignorar cualquier error al borrar (clave inexistente / protegida)
-                    pass
+                    pass  # ignorar si no se puede borrar
         
         
         # ============================================================
@@ -621,30 +637,46 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     st.session_state.guardado_exitoso = True
 
 # ============================================================
-# POST-GUARDADO: BOTÓN PARA NUEVA PÓLIZA
+# POST-GUARDADO: Mensaje y botones
 # ============================================================
-if st.session_state.guardado_exitoso:
+if st.session_state.get("guardado_exitoso", False):
+    # Ancla para lugar superior (opcional, pero inofensivo)
+    st.markdown('<a name="top"></a>', unsafe_allow_html=True)
     st.info("Póliza guardada correctamente.")
 
-    # ---------------------------
-    # BOTÓN: Limpiar formulario (colocado junto a botones de tu formulario)
-    # ---------------------------
-    # ponlo en la misma sección donde tienes el botón "Guardar Póliza"
+    # Mostrar botón para limpiar y volver al formulario
     col_clear_left, col_clear_center, col_clear_right = st.columns([1, 2, 1])
     with col_clear_left:
         if st.button("🧹 Limpiar formulario", key="limpiar_form_btn"):
-            # 1) borrar los campos
+            # 1) borrar los campos del formulario (no borrar el ID por defecto)
             limpiar_formulario_safe(preserve_no_cliente=True)
-    
-            # 2) (opcional) forzar que la app muestre la UI limpia y que el scroll quede arriba
-            #    experimental_set_query_params suele mover la vista al inicio en la recarga.
+
+            # 2) resetear la bandera para que la UI vuelva al estado inicial
+            st.session_state.guardado_exitoso = False
+
+            # 3) opcional: forzar que en la siguiente carga haga scroll top usando query param
+            try:
+                st.set_query_params(scroll="top")
+            except Exception:
+                pass
+
+            # 4) recargar la app para reconstruir los widgets vacíos
+            st.rerun()
+
+    # También mostramos un botón central para "Registrar otra póliza" que hace lo mismo
+    with col_clear_center:
+        if st.button("🆕 Registrar otra póliza", key="registrar_otra_btn"):
+            limpiar_formulario_safe(preserve_no_cliente=True)
+            st.session_state.guardado_exitoso = False
             try:
                 st.experimental_set_query_params(scroll="top")
             except Exception:
                 pass
-    
-            # 3) recargar para reconstruir los widgets vacíos
             st.rerun()
+
+    # (opcional) columna derecha para alguna otra acción
+    with col_clear_right:
+        st.write("")  # reserva espacio o agrega otro control si quieres
 # ============================================================
 # 2. CONSULTAR PÓLIZAS POR CLIENTE (CON DUPICACIÓN Y ELIMINACIÓN)
 # ============================================================
@@ -1303,6 +1335,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
