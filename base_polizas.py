@@ -586,6 +586,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                             pass  # Si ya fue eliminado por Streamlit, ignorar
                 
                 # Después de guardar correctamente la póliza:
+
                 if agregar_poliza(datos_poliza):
                     st.success(f"✅ Póliza {no_poliza} guardada exitosamente para el cliente {contratante} (ID: {nuevo_id})!")
                     st.balloons()
@@ -593,7 +594,10 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     # 🔄 Limpieza total del formulario
                     limpiar_formulario()
                 
-                    # Forzar rerun para reconstruir la UI vacía
+                    # 🧩 Evitar duplicados en el rerun
+                    st.session_state["guardar_poliza_btn"] = False
+                
+                    # 🔁 Forzar rerun limpio
                     st.rerun()
 
 # ============================================================
@@ -1254,6 +1258,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
