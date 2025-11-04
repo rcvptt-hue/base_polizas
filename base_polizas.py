@@ -414,6 +414,8 @@ if menu == "📝 Data Entry - Nueva Póliza":
         for key in list(st.session_state.keys()):
             if key.endswith('_input') or key.endswith('_select'):
                 del st.session_state[key]
+         # Forzar nuevas keys para los widgets
+        st.session_state.form_key = str(uuid.uuid4())
     
     # Botón para limpiar formulario (fuera del formulario)
     if st.button("🧹 Limpiar Formulario", use_container_width=True, type="secondary", 
@@ -692,6 +694,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                     
                     # Limpiar formulario después de guardado exitoso
                     limpiar_formulario()
+                    with st.form(f"form_nueva_poliza_{st.session_state.get('form_key', 'default')}", clear_on_submit=False):
                     st.rerun()
                 else:
                     st.error("❌ Error al guardar la póliza. Por favor intenta nuevamente.")
@@ -1446,6 +1449,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
