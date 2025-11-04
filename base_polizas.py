@@ -660,6 +660,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
 
                 if agregar_poliza(datos_poliza):
+                    st.success("Póliza guardada exitosamente!")
                     # Limpiar el formulario solo si se guardó exitosamente
                     st.session_state.datos_formulario = {}
                     st.rerun()
@@ -1414,6 +1415,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
