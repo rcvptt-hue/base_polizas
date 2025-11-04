@@ -404,14 +404,24 @@ if menu == "📝 Data Entry - Nueva Póliza":
     # Calcular ID pero no mostrarlo
     nuevo_id = generar_nuevo_id_cliente()
     
+    # Inicializar estado para controlar el reseteo del formulario
+    if 'formulario_guardado_exitosamente' not in st.session_state:
+        st.session_state.formulario_guardado_exitosamente = False
+    
+    # Si el formulario se guardó exitosamente, limpiar los datos y resetear el estado
+    if st.session_state.formulario_guardado_exitosamente:
+        st.session_state.datos_formulario = {}
+        st.session_state.formulario_guardado_exitosamente = False
+        st.success("✅ ¡Póliza guardada exitosamente! El formulario se ha limpiado.")
+        # Opcional: agregar un pequeño delay antes de recargar
+        time.sleep(1)
+        st.rerun()
+    
     # Usar formulario sin clear_on_submit para mantener datos en caso de error
-    with st.form("form_nueva_poliza"):
+    with st.form("form_nueva_poliza", clear_on_submit=False):
         col1, col2 = st.columns(2)
         
         with col1:
-            # No mostrar el campo "No. Cliente" pero sí calcularlo
-            # st.text_input("No. Cliente *", value=str(nuevo_id), key="no_cliente_auto", disabled=True)
-            
             contratante = st.text_input(
                 "CONTRATANTE *", 
                 value=st.session_state.datos_formulario.get("contratante", ""),
@@ -660,10 +670,13 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 ]
 
                 if agregar_poliza(datos_poliza):
-                    st.success("Póliza guardada exitosamente!")
-                    # Limpiar el formulario solo si se guardó exitosamente
-                    st.session_state.datos_formulario = {}
+                    # Marcar que el formulario se guardó exitosamente
+                    st.session_state.formulario_guardado_exitosamente = True
+                    st.balloons()
+                    # El formulario se limpiará en el próximo rerun debido al estado anterior
                     st.rerun()
+                else:
+                    st.error("❌ Error al guardar la póliza. Por favor intenta nuevamente.")
 
 # ============================================================
 # CONSULTAR PÓLIZAS POR CLIENTE
@@ -1415,6 +1428,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
