@@ -38,29 +38,19 @@ except Exception:
     pass
 
 # ============================================================
-# FUNCIÓN PARA LIMPIAR FORMULARIO DE NUEVA PÓLIZA
+# SOLUCIÓN DEFINITIVA PARA LIMPIAR FORMULARIOS
 # ============================================================
 def limpiar_formulario_nueva_poliza():
-    """Limpia todos los campos del formulario de nueva póliza excepto el ID de cliente"""
-    # Lista de todas las claves que deben limpiarse
-    claves_a_limpiar = [
-        "contratante_input", "asegurado_input", "beneficiario_input",
-        "fecha_nac_contratante_input", "fecha_nac_asegurado_input", "estado_civil_select",
-        "no_poliza_input", "inicio_vigencia_input", "fin_vigencia_input",
-        "forma_pago_input", "frecuencia_pago_input", "prima_anual_input",
-        "producto_input", "no_serie_auto_input", "aseguradora_select",
-        "direccion_input", "telefono_input", "email_input", "notas_input",
-        "descripcion_auto_input", "guardado_exitoso"
-    ]
-    
-    # Limpiar cada clave si existe
-    for clave in claves_a_limpiar:
-        if clave in st.session_state:
-            del st.session_state[clave]
-    
-    # Forzar rerun para actualizar la interfaz
+    """Limpia todos los campos del formulario usando una aproximación diferente"""
+    # En lugar de borrar session_state, usamos un flag y rerun
+    st.session_state.formulario_limpiado = True
     st.rerun()
-    
+def inicializar_formulario():
+    """Inicializa el estado del formulario si es necesario"""
+    if 'formulario_limpiado' not in st.session_state:
+        st.session_state.formulario_limpiado = False
+    if 'formulario_inicializado' not in st.session_state:
+        st.session_state.formulario_inicializado = True
 # ============================================================
 # CONFIGURACIÓN DE GOOGLE SHEETS CON MANEJO DE CUOTAS
 # ============================================================
@@ -1334,3 +1324,4 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
