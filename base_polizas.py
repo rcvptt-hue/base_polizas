@@ -617,7 +617,7 @@ if menu == "📝 Data Entry - Nueva Póliza":
                 if agregar_poliza(datos_poliza):
                     st.success(f"✅ Póliza {no_poliza} guardada exitosamente para {contratante} (ID: {id_cliente})!")
                     st.balloons()
-                    limpiar_formulario()
+                    limpiar_formulario_safe()
                     st.session_state.guardado_exitoso = True
 
 # ============================================================
@@ -1303,6 +1303,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
