@@ -530,7 +530,23 @@ if menu == "📝 Data Entry - Nueva Póliza":
     
     with col_btn2:
         guardar_button = st.button("💾 Guardar Póliza", use_container_width=True, type="primary", key="guardar_poliza_btn")
-    
+
+        # ============================================================
+        # FUNCIÓN PARA LIMPIAR EL FORMULARIO (segura para Streamlit 1.40+)
+        # ============================================================
+        
+        def limpiar_formulario():
+            """Elimina las claves del formulario sin modificar widgets activos."""
+            keys_a_borrar = [
+                k for k in list(st.session_state.keys())
+                if k.endswith('_input') or k.endswith('_select')
+            ]
+            for k in keys_a_borrar:
+                try:
+                    del st.session_state[k]
+                except KeyError:
+                    pass  # Si ya fue eliminado por Streamlit, ignorar
+                
         if "guardado_exitoso" not in st.session_state:
             st.session_state.guardado_exitoso = False
     
@@ -1242,6 +1258,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
