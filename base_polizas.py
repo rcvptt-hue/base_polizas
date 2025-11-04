@@ -647,15 +647,8 @@ if st.session_state.get("guardado_exitoso", False):
     # 🧹 BOTÓN LIMPIAR FORMULARIO
     with col_clear_left:
         if st.button("🧹 Limpiar formulario", key="limpiar_form_btn"):
-            limpiar_formulario_safe(preserve_no_cliente=True)
-            st.session_state.guardado_exitoso = False  # vuelve al estado normal
-
-            try:
-                st.experimental_set_query_params(scroll="top")
-            except Exception:
-                pass
-
-            st.rerun()  # 👈 ahora con la función estable de Streamlit
+            st.session_state.limpiar = True
+            st.rerun()
 
     # 🆕 BOTÓN REGISTRAR OTRA PÓLIZA
     with col_clear_center:
@@ -1330,6 +1323,7 @@ try:
         st.sidebar.write(f"**Último ID utilizado:** {ultimo_id}")
 except:
     pass
+
 
 
 
